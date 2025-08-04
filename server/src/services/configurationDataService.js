@@ -179,8 +179,8 @@ const configurationDataService = {
 
             const record = await prisma.configurationData.upsert({
                 where: { workflowNodeId_userId_roleId: { workflowNodeId: workflowNode.id, userId, roleId } },
-                update: { data: { apis } },
-                create: { workflowNodeId: workflowNode.id, userId, roleId, data: { apis } }
+                update: { data: nodeData },
+                create: { workflowNodeId: workflowNode.id, userId, roleId, data: nodeData }
             });
 
             results.push({
