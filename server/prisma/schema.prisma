@@ -1,0 +1,116 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String @id @default(uuid())
+  username String @unique
+  email    String @unique
+  password String
+  roleId   String
+
+  role              Role                @relation(fields: [roleId], references: [id])
+  workflow          Workflow[]
+  configurationData ConfigurationData[]
+}
+
+model Role {
+  id    String @id @default(uuid())
+  name  String @unique
+  users User[]
+
+  configurationData ConfigurationData[]
+}
+
+model Workflow {
+  id         String         @id @default(uuid())
+  name       String
+  createdAt  DateTime       @default(now())
+  type       VisibilityType @default(GENERAL)
+  project    String?
+  status     Status         @default(DRAFT)
+  workflowId String?        @db.VarChar(100)
+  userId     String
+  user       User           @relation(fields: [userId], references: [id])
+
+  xmlContent  String?
+  jsonContent Json?
+
+  workflowNode WorkflowNode[]
+}
+
+model WorkflowNode {
+  id         String   @id @default(uuid())
+  nodeId     String // BPMN node id
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id])
+
+  configurationData ConfigurationData[]
+
+  @@unique([workflowId, nodeId])
+}
+
+model ConfigurationData {
+  id             String   @id @default(uuid())
+  workflowNodeId String
+  userId         String
+  roleId         String
+  description    String?
+  data           Json?
+  attachments    String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workflowNode WorkflowNode @relation(fields: [workflowNodeId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  @@unique([workflowNodeId, userId, roleId])
+}
+
+model TestBatch {
+  id        String     @id @default(uuid())
+  scenarios Scenario[] // Một batch chứa nhiều scenario
+}
+
+model Scenario {
+  id          String     @id @default(uuid())
+  name        String
+  testBatchId String?     // Khóa ngoại liên kết tới TestBatch
+
+  testBatch   TestBatch?  @relation(fields: [testBatchId], references: [id], onDelete: Cascade)
+  testCases   TestCase[] // Một Scenario chứa nhiều TestCase
+}
+
+model TestCase {
+  id           String   @id @default(uuid())
+  testCaseData Json?
+  result       Json?
+
+  scenarioId   String?   // Khóa ngoại liên kết tới Scenario
+  scenario     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+}
+
+enum VisibilityType {
+  GENERAL
+  ROLE_BASED
+}
+
+enum Status {
+  DRAFT
+  SUBMITTED
+  DONE
+  CANCELLED
+}

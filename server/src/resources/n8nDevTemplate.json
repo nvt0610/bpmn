@@ -1,0 +1,98 @@
+{
+  "name": "Sample Workflow",
+  "nodes": [
+    {
+      "id": "Activity_0rbtfo4",
+      "name": "HTTP Request 1 - API 1",
+      "parameters": {
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer Your_token_here" }
+          ]
+        },
+        "method": "GET",
+        "options": {},
+        "queryParameters": {
+          "parameters": [
+            { "name": "param1", "value": "value1" },
+            { "name": "param2", "value": "value2" }
+          ]
+        },
+        "bodyParameters": {
+          "parameters": [
+            { "name": "body", "value": "1" }
+          ]
+        },
+        "sendBody": true,
+        "sendHeaders": true,
+        "sendQuery": true,
+        "url": "https://example.com/api/v1/resource"
+      },
+      "type": "n8n-nodes-base.httpRequest"
+    },
+    {
+      "id": "Activity_0rbtfo4",
+      "name": "HTTP Request 1 - API 2",
+      "parameters": {
+        "headerParameters": { "parameters": [] },
+        "method": "POST",
+        "options": {},
+        "queryParameters": { "parameters": [] },
+        "bodyParameters": {
+          "parameters": [
+            { "name": "data", "value": "2" }
+          ]
+        },
+        "sendBody": true,
+        "sendHeaders": false,
+        "sendQuery": false,
+        "url": "https://example.com/api/v1/submit"
+      },
+      "type": "n8n-nodes-base.httpRequest"
+    },
+    {
+      "id": "Activity_1xyzabc",
+      "name": "HTTP Request 2 - API 1",
+      "parameters": {
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Key", "value": "Key_123" }
+          ]
+        },
+        "method": "GET",
+        "options": {},
+        "queryParameters": {
+          "parameters": [
+            { "name": "foo", "value": "bar" }
+          ]
+        },
+        "bodyParameters": { "parameters": [] },
+        "sendBody": false,
+        "sendHeaders": true,
+        "sendQuery": true,
+        "url": "https://api.example.com/getData"
+      },
+      "type": "n8n-nodes-base.httpRequest"
+    },
+    {
+      "id": "Activity_1xyzabc",
+      "name": "HTTP Request 2 - API 2",
+      "parameters": {
+        "headerParameters": { "parameters": [] },
+        "method": "PUT",
+        "options": {},
+        "queryParameters": { "parameters": [] },
+        "bodyParameters": {
+          "parameters": [
+            { "name": "update", "value": "yes" }
+          ]
+        },
+        "sendBody": true,
+        "sendHeaders": false,
+        "sendQuery": false,
+        "url": "https://api.example.com/updateData"
+      },
+      "type": "n8n-nodes-base.httpRequest"
+    }
+  ]
+}

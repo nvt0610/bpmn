@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "TestCase" ALTER COLUMN "type" SET DEFAULT 'GENERAL',
+ALTER COLUMN "xmlContent" DROP NOT NULL;
