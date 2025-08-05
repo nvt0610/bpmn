@@ -4,6 +4,19 @@ import fs from "fs";
 import path from "path";
 import xml2json from "xml2json";
 import testCaseNodeService from './workflowNodeService.js';
+import { v4 as uuidv4 } from "uuid";
+
+function generateBpmnXmlWithUuid(workflowName) {
+  const uuid = uuidv4().replace(/-/g, '');
+  const processId = `Process_${uuid}`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_${uuid}" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.37.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.7.0">
+  <bpmn:process id="${processId}" name="${workflowName}" isExecutable="true" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${processId}" />
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+}
 
 const workflowService = {
     getAllworkflows: async ({ page, pageSize } = {}) => {
@@ -20,7 +33,7 @@ const workflowService = {
                 options.take = ps;
             }
 
-            const workflows = await prisma.workflow .findMany(options);
+            const workflows = await prisma.workflow.findMany(options);
             return {
                 status: 200,
                 success: true,
@@ -81,11 +94,7 @@ const workflowService = {
         // Load file mặc định nếu không truyền xmlContent
         let finalXmlContent = xmlContent;
         if (!finalXmlContent) {
-            const defaultPath = path.resolve("src", "resources", "newDiagram.bpmn");
-            if (!fs.existsSync(defaultPath)) {
-                throw new Error("Missing newDiagram.bpmn template file.");
-            }
-            finalXmlContent = fs.readFileSync(defaultPath, "utf8");
+            finalXmlContent = generateBpmnXmlWithUuid(name); // Dùng hàm generate phía trên
         }
 
         // Parse XML to JSON nếu chưa có jsonContent

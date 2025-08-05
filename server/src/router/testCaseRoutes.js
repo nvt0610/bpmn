@@ -5,7 +5,7 @@ const router = express.Router();
 
 const testCaseRoutes = (app) => {
   router.get("/", testCaseController.getAllTestCases);
-  router.post("/receive", testCaseController.receiveResultTestCase);
+  router.post("/resultreceive", testCaseController.receiveResultTestCase);
   router.get("/:id", testCaseController.getTestCaseById);
   router.post("/", testCaseController.createTestCase);
   router.put("/:id", testCaseController.updateTestCase);

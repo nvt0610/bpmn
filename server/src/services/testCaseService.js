@@ -68,23 +68,23 @@ const testCaseService = {
     }
   },
 
-  receiveResultTestCase: async ({ result, scenarioId }) => {
+  // Controller nhận req.params.id và req.body.result
+  receiveResultTestCase: async ({ id, result }) => {
     try {
-      const testCase = await prisma.testCase.create({
-        data: {
-          result: result ?? null,
-          scenarioId: scenarioId ?? null,
-        },
+      const testCase = await prisma.testCase.upsert({
+        where: { id },  // id là string
+        update: { result: result ?? null },
+        create: { id, result: result ?? null },
       });
 
       return {
-        status: 201,
+        status: 200,
         success: true,
-        message: "Receive result successfully",
+        message: "Upsert result successfully",
         data: testCase,
       };
     } catch (error) {
-      throw new Error("Failed to receive result test case: " + error.message);
+      throw new Error("Failed to upsert result test case: " + error.message);
     }
   },
 

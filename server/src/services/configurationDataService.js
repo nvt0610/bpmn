@@ -187,6 +187,7 @@ const configurationDataService = {
                 status: 200,
                 success: true,
                 message: existed ? "Updated" : "Created new",
+                nodeId: nodeid,
                 data: unwrapData(record)
             });
         }

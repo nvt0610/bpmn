@@ -7,6 +7,7 @@ import workflowNodeRoutes from "./workflowNodeRoutes.js";
 import resultRoutes from "./resultRoutes.js";
 import scenarioRoutes from "./scenarioRoutes.js";
 import testCaseRoutes from "./testCaseRoutes.js";
+import testBatchRoutes from "./testBatchRoutes.js";
 
 let initWebRouter = (app) => {
   roleRoutes(app);
@@ -18,6 +19,7 @@ let initWebRouter = (app) => {
   resultRoutes(app);
   scenarioRoutes(app);
   testCaseRoutes(app);
+  testBatchRoutes(app);
 };
 
 export default initWebRouter;
