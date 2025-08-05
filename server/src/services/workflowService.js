@@ -1,7 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
-import fs from "fs";
-import path from "path";
 import xml2json from "xml2json";
 import testCaseNodeService from './workflowNodeService.js';
 import { v4 as uuidv4 } from "uuid";
