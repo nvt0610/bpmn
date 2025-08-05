@@ -7,7 +7,6 @@ const unwrapData = (record) => {
     return { ...rest, ...data };
 };
 
-
 const configurationDataService = {
 
     getN8nNode: async ({ id }) => {
@@ -157,47 +156,71 @@ const configurationDataService = {
     },
 
     createConfigurationData: async ({ workflowId, userId, data }) => {
-        const user = await prisma.user.findUnique({ where: { id: userId }, select: { roleId: true } });
-        if (!user) return { status: 404, success: false, message: "User not found" };
-        const roleId = user.roleId;
-        const nodeIds = data.nodeIds || [];
-        const results = [];
+        try {
+            // Query song song cho nhanh
+            const [existingWorkflow, user] = await Promise.all([
+                prisma.workflow.findFirst({ where: { id: workflowId } }),
+                prisma.user.findUnique({ where: { id: userId }, select: { roleId: true } }),
+            ]);
 
-        for (const item of nodeIds) {
-            const nodeid = item.nodeid;
-            const workflowNode = await prisma.workflowNode.findUnique({
-                where: { workflowId_nodeId: { workflowId, nodeId: nodeid } }
-            });
-            if (!workflowNode) continue;
+            const errors = [];
+            if (!existingWorkflow) errors.push("Workflow not found");
+            if (!user) errors.push("User not found");
 
-            // Lưu toàn bộ object item (trừ nodeid)
-            const { nodeid: _, ...nodeData } = item;
+            if (errors.length > 0) {
+                return {
+                    status: 400,
+                    success: false,
+                    message: errors.join(" & "),
+                    errors,
+                };
+            }
 
-            const existed = await prisma.configurationData.findUnique({
-                where: { workflowNodeId_userId_roleId: { workflowNodeId: workflowNode.id, userId, roleId } }
-            });
+            const roleId = user.roleId;
+            const nodeIds = data.nodeIds || [];
+            const results = [];
 
-            const record = await prisma.configurationData.upsert({
-                where: { workflowNodeId_userId_roleId: { workflowNodeId: workflowNode.id, userId, roleId } },
-                update: { data: nodeData },
-                create: { workflowNodeId: workflowNode.id, userId, roleId, data: nodeData }
-            });
+            for (const item of nodeIds) {
+                const nodeid = item.nodeid;
+                const workflowNode = await prisma.workflowNode.findUnique({
+                    where: { workflowId_nodeId: { workflowId, nodeId: nodeid } }
+                });
+                if (!workflowNode) continue;
 
-            results.push({
-                status: 200,
+                // Lưu toàn bộ object item (trừ nodeid)
+                const { nodeid: _, ...nodeData } = item;
+
+                const existed = await prisma.configurationData.findUnique({
+                    where: { workflowNodeId_userId_roleId: { workflowNodeId: workflowNode.id, userId, roleId } }
+                });
+
+                const record = await prisma.configurationData.upsert({
+                    where: { workflowNodeId_userId_roleId: { workflowNodeId: workflowNode.id, userId, roleId } },
+                    update: { data: nodeData },
+                    create: { workflowNodeId: workflowNode.id, userId, roleId, data: nodeData }
+                });
+
+                results.push({
+                    status: 200,
+                    success: true,
+                    message: existed ? "Updated" : "Created new",
+                    nodeId: nodeid,
+                    data: unwrapData(record)
+                });
+            }
+
+            return {
+                status: 207,
                 success: true,
-                message: existed ? "Updated" : "Created new",
-                nodeId: nodeid,
-                data: unwrapData(record)
-            });
+                message: "Processed all nodeIds",
+                data: results
+            };
+        } catch (error) {
+            return {
+                status: 500,
+                message: "Error creating configuration data: " + error.message,
+            };
         }
-
-        return {
-            status: 207,
-            success: true,
-            message: "Processed all nodeIds",
-            data: results
-        };
     },
 
     updateConfigurationData: async ({ id, workflowId, nodeId, userId, roleId, data, description, attachments }) => {

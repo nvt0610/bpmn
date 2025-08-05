@@ -6,11 +6,12 @@ const router = express.Router();
 const testBatchRoutes = (app) => {
   router.get("/", testBatchController.getAllTestBatches);
   router.get("/:id", testBatchController.getTestBatchById);
+  router.post("/resultreceive", testBatchController.receiveBatchResult);
   router.post("/", testBatchController.createTestBatch);
   router.put("/:id", testBatchController.updateTestBatch);
   router.delete("/:id", testBatchController.deleteTestBatch);
 
-  return app.use("/api/testbatch", router);
+  return app.use("/api/v1/testbatch", router);
 };
 
 export default testBatchRoutes;

@@ -11,6 +11,11 @@ const testBatchController = {
     res.status(result.status).json(result);
   },
 
+  receiveBatchResult: async (req, res) => {
+    const result = await testBatchService.receiveBatchResult(req.body);
+    res.status(result.status).json(result);
+  },
+
   createTestBatch: async (req, res) => {
     const result = await testBatchService.createTestBatch(req.body);
     res.status(result.status).json(result);

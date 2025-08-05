@@ -11,7 +11,7 @@ const testCaseRoutes = (app) => {
   router.put("/:id", testCaseController.updateTestCase);
   router.delete("/:id", testCaseController.deleteTestCase);
 
-  return app.use("/api/testcases", router);
+  return app.use("/api/v1/testcases", router);
 };
 
 export default testCaseRoutes;

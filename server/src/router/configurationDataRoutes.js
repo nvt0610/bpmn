@@ -12,7 +12,7 @@ const configurationDataRoutes = (app) => {
 
     router.get("/:id/n8n-node", configurationDataController.getN8nNode);
 
-    return app.use("/api/configurationdata", router);
+    return app.use("/api/v1/configurationdata", router);
 };
 
 export default configurationDataRoutes;

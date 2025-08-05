@@ -5,9 +5,9 @@ import testCaseNodeService from './workflowNodeService.js';
 import { v4 as uuidv4 } from "uuid";
 
 function generateBpmnXmlWithUuid(workflowName) {
-  const uuid = uuidv4().replace(/-/g, '');
-  const processId = `Process_${uuid}`;
-  return `<?xml version="1.0" encoding="UTF-8"?>
+    const uuid = uuidv4().replace(/-/g, '');
+    const processId = `Process_${uuid}`;
+    return `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_${uuid}" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.37.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.7.0">
   <bpmn:process id="${processId}" name="${workflowName}" isExecutable="true" />
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
@@ -106,15 +106,21 @@ const workflowService = {
         }
 
         try {
-            const existing = await prisma.workflow.findFirst({
-                where: { name },
-            });
+            const [existingWorkflow, existingUser] = await Promise.all([
+                prisma.workflow.findFirst({ where: { name } }),
+                prisma.user.findUnique({ where: { id: userId } }),
+            ]);
 
-            if (existing) {
+            const errors = [];
+            if (existingWorkflow) errors.push("Workflow name already exists");
+            if (!existingUser) errors.push("User not found");
+
+            if (errors.length > 0) {
                 return {
-                    status: 409,
+                    status: 400,
                     success: false,
-                    message: "Workflow name already exists",
+                    message: errors.join(" & "),
+                    errors,
                 };
             }
 
@@ -179,7 +185,10 @@ const workflowService = {
                 data: newWorkflow,
             };
         } catch (error) {
-            throw new Error("Failed to create workflow: " + error.message);
+            return {
+                status: 500,
+                message: "Error creating configuration data: " + error.message,
+            };
         }
     },
 

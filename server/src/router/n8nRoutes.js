@@ -7,7 +7,7 @@ const n8nRoutes = (app) => {
   router.get("/testcase/:id", N8nController.getTestCaseById);
   router.post("/testcase/:id/export-workflow", N8nController.export);
 
-  return app.use("/api/n8n", router);
+  return app.use("/api/v1/n8n", router);
 };
 
 export default n8nRoutes;

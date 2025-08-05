@@ -50,18 +50,26 @@ const testCaseService = {
 
   createTestCase: async ({ testCaseData, scenarioId }) => {
     try {
-      const testCase = await prisma.testCase.create({
+      const existingScenario = await prisma.scenario.findUnique({
+        where: { id: scenarioId },
+      });
+      if (!existingScenario) {
+        return {
+          status: 404,
+          message: "Scenario not found",
+        };
+      }
+      const newTestCase = await prisma.testCase.create({
         data: {
           testCaseData: testCaseData ?? null,
           scenarioId: scenarioId ?? null,
         },
       });
-
       return {
         status: 201,
         success: true,
         message: "TestCase created successfully",
-        data: testCase,
+        data: newTestCase,
       };
     } catch (error) {
       throw new Error("Failed to create test case: " + error.message);
@@ -69,22 +77,23 @@ const testCaseService = {
   },
 
   // Controller nhận req.params.id và req.body.result
-  receiveResultTestCase: async ({ id, result }) => {
+  receiveResultTestCase: async ({ testCaseId, result }) => {
+    if (!testCaseId) throw new Error("Missing testCaseId");
+
     try {
-      const testCase = await prisma.testCase.upsert({
-        where: { id },  // id là string
-        update: { result: result ?? null },
-        create: { id, result: result ?? null },
+      const testCase = await prisma.testCase.update({
+        where: { id: testCaseId },
+        data: { result: result ?? null },
       });
 
       return {
         status: 200,
         success: true,
-        message: "Upsert result successfully",
+        message: "Update result successfully",
         data: testCase,
       };
     } catch (error) {
-      throw new Error("Failed to upsert result test case: " + error.message);
+      throw new Error("Failed to update result test case: " + error.message);
     }
   },
 

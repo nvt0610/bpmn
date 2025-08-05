@@ -10,7 +10,7 @@ const roleRoutes = (app) => {
   router.put("/:id", roleController.updateRole);
   router.delete("/:id", roleController.deleteRole);
 
-  return app.use("/api/roles", router);
+  return app.use("/api/v1/roles", router);
 };
 
 export default roleRoutes;
