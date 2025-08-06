@@ -236,9 +236,47 @@ const workflowService = {
                 }
             }
 
+            // Nếu có xmlContent mới, parse và tạo node mới nếu cần
+            if (dataToUpdate.xmlContent) {
+                let jsonContent;
+                try {
+                    jsonContent = xml2json.toJson(dataToUpdate.xmlContent, { object: true });
+                } catch (err) {
+                    return {
+                        status: 400,
+                        success: false,
+                        message: "Invalid XML content",
+                    };
+                }
+
+                const defs = jsonContent?.['bpmn:definitions']?.['bpmn:process'];
+                if (defs) {
+                    let nodeIdSet = new Set();
+                    for (const [key, value] of Object.entries(defs)) {
+                        if (key === "bpmn:sequenceFlow") continue;
+                        if (Array.isArray(value)) value.forEach(item => item.id && nodeIdSet.add(item.id));
+                        else if (value && typeof value === 'object' && value.id) nodeIdSet.add(value.id);
+                    }
+                    const nodeIds = Array.from(nodeIdSet);
+
+                    // Tạo node mới nếu chưa có trong DB
+                    for (const nodeId of nodeIds) {
+                        const exists = await prisma.workflowNode.findUnique({
+                            where: { workflowId_nodeId: { workflowId: id, nodeId } }
+                        });
+                        if (!exists) {
+                            await prisma.workflowNode.create({
+                                data: { workflowId: id, nodeId }
+                            });
+                        }
+                    }
+                }
+            }
+
             const updated = await prisma.workflow.update({
                 where: { id },
                 data: dataToUpdate,
+                include: { workflowNode: true },
             });
 
             return {

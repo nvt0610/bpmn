@@ -43,28 +43,49 @@ const testBatchService = {
     },
 
     receiveBatchResult: async ({ batchId, scenarios }) => {
+        // Kiểm tra tồn tại batch, scenario, testcase (giữ nguyên phần này như cũ nếu muốn validate kỹ)
         const scenarioIds = scenarios.map(s => s.scenarioId);
         const [existingBatch, existingScenarios] = await Promise.all([
             prisma.testBatch.findFirst({ where: { id: batchId } }),
             prisma.scenario.findMany({ where: { id: { in: scenarioIds } } }),
         ]);
-
         const errors = [];
         if (!existingBatch) errors.push("Test batch not found");
-        // Check thiếu scenario nào
         const existingIds = new Set(existingScenarios.map(s => s.id));
         const missingScenarioIds = scenarioIds.filter(id => !existingIds.has(id));
         if (missingScenarioIds.length > 0) errors.push("Scenario(s) not found: " + missingScenarioIds.join(", "));
 
         const testCaseIds = scenarios.flatMap(s => s.testCases.map(tc => tc.testCaseId));
-        const existingTestCases = await prisma.testCase.findMany({
-            where: { id: { in: testCaseIds } },
-        });
+        const existingTestCases = await prisma.testCase.findMany({ where: { id: { in: testCaseIds } } });
         const existingTestCaseIds = new Set(existingTestCases.map(tc => tc.id));
         const missingTestCaseIds = scenarios.flatMap(s => s.testCases)
             .filter(tc => !existingTestCaseIds.has(tc.testCaseId))
             .map(tc => tc.testCaseId);
         if (missingTestCaseIds.length > 0) errors.push("Test case(s) not found: " + missingTestCaseIds.join(", "));
+
+        // Validate TestCaseNode tồn tại
+        const allTestCaseNodes = scenarios.flatMap(s => s.testCases.flatMap(tc =>
+            (tc.nodeIds || []).map(n => ({
+                testCaseId: tc.testCaseId,
+                nodeId: n.nodeId
+            }))
+        ));
+        // Lấy tất cả TestCaseNode hiện có
+        const existingTestCaseNodes = await prisma.testCaseNode.findMany({
+            where: {
+                OR: allTestCaseNodes
+            }
+        });
+        const nodeKeySet = new Set(existingTestCaseNodes.map(n => `${n.testCaseId}_${n.nodeId}`));
+        const missingTestCaseNode = allTestCaseNodes.filter(
+            n => !nodeKeySet.has(`${n.testCaseId}_${n.nodeId}`)
+        );
+        if (missingTestCaseNode.length > 0) {
+            errors.push(
+                "TestCaseNode(s) not found: " +
+                missingTestCaseNode.map(n => `[${n.testCaseId},${n.nodeId}]`).join(", ")
+            );
+        }
 
         if (errors.length > 0) {
             return {
@@ -75,27 +96,34 @@ const testBatchService = {
             };
         }
 
+        // Cập nhật result từng node
         let updated = 0;
         let failed = [];
         let updatedData = [];
-        // Lưu kết quả cho từng test case
         for (const scenario of scenarios) {
             for (const testCase of scenario.testCases || []) {
-                if (testCase.testCaseId && testCase.result) {
+                for (const node of testCase.nodeIds || []) {
                     try {
-                        const updatedTestCase = await prisma.testCase.update({
-                            where: { id: testCase.testCaseId },
-                            data: { result: testCase.result }
+                        const updatedNode = await prisma.testCaseNode.update({
+                            where: {
+                                testCaseId_nodeId: {
+                                    testCaseId: testCase.testCaseId,
+                                    nodeId: node.nodeId
+                                }
+                            },
+                            data: { result: node.result }
                         });
                         updated++;
                         updatedData.push({
-                            scenarioId: updatedTestCase.scenarioId,
-                            testCaseId: updatedTestCase.id, // đặt tên là testCaseId cho FE dễ nhận
-                            result: updatedTestCase.result
+                            scenarioId: scenario.scenarioId,
+                            testCaseId: testCase.testCaseId,
+                            nodeId: node.nodeId,
+                            result: node.result
                         });
                     } catch (error) {
                         failed.push({
                             testCaseId: testCase.testCaseId,
+                            nodeId: node.nodeId,
                             message: error.message
                         });
                     }
@@ -108,10 +136,10 @@ const testBatchService = {
             success: failed.length === 0,
             message: failed.length === 0
                 ? "Batch results updated successfully"
-                : `Some test cases failed to update`,
+                : "Some test cases failed to update",
             updated,
             failed,
-            data: updatedData // FE sẽ nhận [{scenarioId, testCaseId, result}, ...]
+            data: updatedData,
         };
     },
 

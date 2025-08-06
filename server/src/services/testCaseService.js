@@ -7,6 +7,7 @@ const testCaseService = {
       const testCases = await prisma.testCase.findMany({
         include: {
           scenario: true, // Lấy luôn thông tin scenario nếu cần
+          testCaseNodes: true,
         },
       });
       return {
@@ -26,6 +27,7 @@ const testCaseService = {
         where: { id },
         include: {
           scenario: true,
+          testCaseNodes: true,
         },
       });
 
@@ -48,7 +50,7 @@ const testCaseService = {
     }
   },
 
-  createTestCase: async ({ testCaseData, scenarioId }) => {
+  createTestCase: async ({ name, scenarioId }) => {
     try {
       const existingScenario = await prisma.scenario.findUnique({
         where: { id: scenarioId },
@@ -61,7 +63,7 @@ const testCaseService = {
       }
       const newTestCase = await prisma.testCase.create({
         data: {
-          testCaseData: testCaseData ?? null,
+          name: name ?? null,
           scenarioId: scenarioId ?? null,
         },
       });
@@ -97,7 +99,61 @@ const testCaseService = {
     }
   },
 
-  updateTestCase: async ({ id, testCaseData, result, scenarioId }) => {
+  createTestCaseWithNodes: async ({ name, scenarioId, testCaseNodes = [] }) => {
+    try {
+      const testCase = await prisma.testCase.create({
+        data: { name: name ?? null, scenarioId: scenarioId ?? null }
+      });
+
+      if (testCaseNodes.length > 0) {
+        const nodesData = testCaseNodes.map(node => {
+          // Deep clone tránh ảnh hưởng
+          const stepWithoutExpectation = JSON.parse(JSON.stringify(node.step || []));
+          const expectationArr = [];
+
+          // Duyệt từng step, từng api
+          stepWithoutExpectation.forEach(step => {
+            if (Array.isArray(step.apis)) {
+              step.apis.forEach(api => {
+                if ('expectedResponse' in api) {
+                  // Lưu expectation riêng
+                  expectationArr.push(api.expectedResponse);
+                  // Xóa expectation khỏi inputParam
+                  delete api.expectedResponse;
+                }
+              });
+            }
+          });
+
+          return {
+            inputParam: stepWithoutExpectation,   // step đã loại expectation
+            expectation: expectationArr,          // chỉ chứa các expectedResponse
+            nodeId: node.nodeId,
+            testCaseId: testCase.id,
+          };
+        });
+
+        await prisma.testCaseNode.createMany({ data: nodesData, skipDuplicates: true });
+      }
+
+      const fullTestCase = await prisma.testCase.findUnique({
+        where: { id: testCase.id },
+        include: { testCaseNodes: true },
+      });
+
+      return {
+        status: 201,
+        success: true,
+        message: "Created test case and nodes successfully",
+        data: fullTestCase,
+      };
+    } catch (error) {
+      throw new Error("Failed to create test case with nodes: " + error.message);
+    }
+  },
+
+
+  updateTestCase: async ({ id, name, scenarioId }) => {
     try {
       const testCase = await prisma.testCase.findUnique({ where: { id } });
       if (!testCase) {
@@ -107,13 +163,16 @@ const testCaseService = {
           message: "TestCase not found",
         };
       }
+      if (scenarioId) {
+        const scenario = await prisma.scenario.findUnique({ where: { id: scenarioId } });
+        if (!scenario) return { status: 404, success: false, message: "Scenario not found" };
+      }
 
       const updated = await prisma.testCase.update({
         where: { id },
         data: {
-          testCaseData: testCaseData ?? null,
-          result: result ?? null,
-          scenarioId: scenarioId ?? null,
+          name: name ?? testCase.name,
+          scenarioId: scenarioId ?? testCase.scenarioId,
         },
       });
 

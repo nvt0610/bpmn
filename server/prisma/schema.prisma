@@ -52,11 +52,13 @@ model Workflow {
 
 model WorkflowNode {
   id         String   @id @default(uuid())
-  nodeId     String // BPMN node id
+  nodeId     String   @unique // BẮT BUỘC phải unique nếu join qua nodeId
   workflowId String
   workflow   Workflow @relation(fields: [workflowId], references: [id])
 
   configurationData ConfigurationData[]
+
+  testCaseNodes TestCaseNode[] // Không cần đặt tên relation
 
   @@unique([workflowId, nodeId])
 }
@@ -95,12 +97,28 @@ model Scenario {
 }
 
 model TestCase {
-  id           String   @id @default(uuid())
-  testCaseData Json?
-  result       Json?
+  id           String   @id @default(uuid())         
+  name         String?
 
   scenarioId   String?   // Khóa ngoại liên kết tới Scenario
   scenario     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  testCaseNodes TestCaseNode[]
+}
+
+model TestCaseNode{
+  id             String   @id @default(uuid())
+  inputParam     Json?
+  expectation    Json?
+  result         Json?
+
+  testCaseId  String
+  testCase    TestCase       @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  nodeId      String         // BPMN node id
+
+  workflowNode WorkflowNode  @relation(fields: [nodeId], references: [nodeId], onDelete: Cascade)
+
+  @@unique([testCaseId, nodeId])
 }
 
 enum VisibilityType {
