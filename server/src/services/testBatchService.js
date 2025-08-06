@@ -43,7 +43,7 @@ const testBatchService = {
     },
 
     receiveBatchResult: async ({ batchId, scenarios }) => {
-        // Kiểm tra tồn tại batch, scenario, testcase (giữ nguyên phần này như cũ nếu muốn validate kỹ)
+        // 1. Validate tồn tại batch, scenario, testcase
         const scenarioIds = scenarios.map(s => s.scenarioId);
         const [existingBatch, existingScenarios] = await Promise.all([
             prisma.testBatch.findFirst({ where: { id: batchId } }),
@@ -51,42 +51,52 @@ const testBatchService = {
         ]);
         const errors = [];
         if (!existingBatch) errors.push("Test batch not found");
-        const existingIds = new Set(existingScenarios.map(s => s.id));
-        const missingScenarioIds = scenarioIds.filter(id => !existingIds.has(id));
+        const existingScenarioIds = new Set(existingScenarios.map(s => s.id));
+        const missingScenarioIds = scenarioIds.filter(id => !existingScenarioIds.has(id));
         if (missingScenarioIds.length > 0) errors.push("Scenario(s) not found: " + missingScenarioIds.join(", "));
 
         const testCaseIds = scenarios.flatMap(s => s.testCases.map(tc => tc.testCaseId));
         const existingTestCases = await prisma.testCase.findMany({ where: { id: { in: testCaseIds } } });
         const existingTestCaseIds = new Set(existingTestCases.map(tc => tc.id));
-        const missingTestCaseIds = scenarios.flatMap(s => s.testCases)
-            .filter(tc => !existingTestCaseIds.has(tc.testCaseId))
-            .map(tc => tc.testCaseId);
+        const missingTestCaseIds = testCaseIds.filter(id => !existingTestCaseIds.has(id));
         if (missingTestCaseIds.length > 0) errors.push("Test case(s) not found: " + missingTestCaseIds.join(", "));
 
-        // Validate TestCaseNode tồn tại
+        // 2. Validate toàn bộ nodeId phải tồn tại trong WorkflowNode
+        const allNodeIds = scenarios.flatMap(s => s.testCases.flatMap(tc => (tc.nodeIds || []).map(n => n.nodeId)));
+        const uniqueNodeIds = [...new Set(allNodeIds)];
+        if (uniqueNodeIds.length > 0) {
+            const existingWorkflowNodes = await prisma.workflowNode.findMany({ where: { nodeId: { in: uniqueNodeIds } } });
+            const existingNodeIdSet = new Set(existingWorkflowNodes.map(n => n.nodeId));
+            const missingNodeIds = uniqueNodeIds.filter(id => !existingNodeIdSet.has(id));
+            if (missingNodeIds.length > 0) errors.push("WorkflowNode(s) not found: " + missingNodeIds.join(", "));
+        }
+
+        // 3. Validate TestCaseNode tồn tại
+        // 3. Validate TestCaseNode tồn tại (nếu thiếu thì tạo mới)
         const allTestCaseNodes = scenarios.flatMap(s => s.testCases.flatMap(tc =>
             (tc.nodeIds || []).map(n => ({
                 testCaseId: tc.testCaseId,
                 nodeId: n.nodeId
             }))
         ));
-        // Lấy tất cả TestCaseNode hiện có
-        const existingTestCaseNodes = await prisma.testCaseNode.findMany({
-            where: {
-                OR: allTestCaseNodes
-            }
-        });
-        const nodeKeySet = new Set(existingTestCaseNodes.map(n => `${n.testCaseId}_${n.nodeId}`));
-        const missingTestCaseNode = allTestCaseNodes.filter(
-            n => !nodeKeySet.has(`${n.testCaseId}_${n.nodeId}`)
-        );
-        if (missingTestCaseNode.length > 0) {
-            errors.push(
-                "TestCaseNode(s) not found: " +
-                missingTestCaseNode.map(n => `[${n.testCaseId},${n.nodeId}]`).join(", ")
+        if (allTestCaseNodes.length > 0) {
+            const existingTestCaseNodes = await prisma.testCaseNode.findMany({
+                where: { OR: allTestCaseNodes }
+            });
+            const nodeKeySet = new Set(existingTestCaseNodes.map(n => `${n.testCaseId}_${n.nodeId}`));
+            const missingTestCaseNode = allTestCaseNodes.filter(
+                n => !nodeKeySet.has(`${n.testCaseId}_${n.nodeId}`)
             );
+            if (missingTestCaseNode.length > 0) {
+                // Tạo mới các bản ghi thiếu
+                await prisma.testCaseNode.createMany({
+                    data: missingTestCaseNode,
+                    skipDuplicates: true // an toàn nếu nhiều luồng
+                });
+            }
         }
 
+        // 4. Nếu có lỗi thì trả luôn
         if (errors.length > 0) {
             return {
                 status: 400,
@@ -96,7 +106,7 @@ const testBatchService = {
             };
         }
 
-        // Cập nhật result từng node
+        // 5. Update result từng node
         let updated = 0;
         let failed = [];
         let updatedData = [];
@@ -142,7 +152,6 @@ const testBatchService = {
             data: updatedData,
         };
     },
-
     createTestBatch: async ({ scenarios = [] }) => {
         try {
             // Gom tất cả id và name từ FE gửi lên

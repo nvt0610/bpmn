@@ -24,7 +24,7 @@ let initWebRouter = (app) => {
   testBatchRoutes(app);
 
   app.post("/api/v1/testcaseresultreceive", testCaseController.receiveResultTestCase);
-  app.post("/api/v1//createwithnodes", testCaseController.createTestCaseWithNodes);
+  app.post("/api/v1/createwithnodes", testCaseController.createTestCaseWithNodes);
   app.post("/api/v1/batchresultreceive", testBatchController.receiveBatchResult);
 
 };

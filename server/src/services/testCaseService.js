@@ -152,7 +152,6 @@ const testCaseService = {
     }
   },
 
-
   updateTestCase: async ({ id, name, scenarioId }) => {
     try {
       const testCase = await prisma.testCase.findUnique({ where: { id } });
