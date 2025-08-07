@@ -72,7 +72,6 @@ const testBatchService = {
         }
 
         // 3. Validate TestCaseNode tồn tại
-        // 3. Validate TestCaseNode tồn tại (nếu thiếu thì tạo mới)
         const allTestCaseNodes = scenarios.flatMap(s => s.testCases.flatMap(tc =>
             (tc.nodeIds || []).map(n => ({
                 testCaseId: tc.testCaseId,
@@ -88,11 +87,10 @@ const testBatchService = {
                 n => !nodeKeySet.has(`${n.testCaseId}_${n.nodeId}`)
             );
             if (missingTestCaseNode.length > 0) {
-                // Tạo mới các bản ghi thiếu
-                await prisma.testCaseNode.createMany({
-                    data: missingTestCaseNode,
-                    skipDuplicates: true // an toàn nếu nhiều luồng
-                });
+                errors.push(
+                    "TestCaseNode(s) not found: " +
+                    missingTestCaseNode.map(n => `[${n.testCaseId},${n.nodeId}]`).join(", ")
+                );
             }
         }
 

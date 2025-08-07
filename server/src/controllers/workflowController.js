@@ -12,6 +12,11 @@ const workflowController = {
     res.status(result.status).json(result);
   },
 
+  runWorkflow: async (req, res) => {
+    const result = await workflowService.runWorkflowById(req.params, req.body); // workflowId
+    res.status(result.status).json(result);
+  },
+
   createWorkflow: async (req, res) => {
     const result = await workflowService.createWorkflow(req.body); // full payload
     res.status(result.status).json(result);

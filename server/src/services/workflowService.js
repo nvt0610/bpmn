@@ -3,6 +3,7 @@ const prisma = new PrismaClient();
 import xml2json from "xml2json";
 import testCaseNodeService from './workflowNodeService.js';
 import { v4 as uuidv4 } from "uuid";
+import n8nService from "./n8nService.js";
 
 function generateBpmnXmlWithUuid(workflowName) {
     const uuid = uuidv4().replace(/-/g, '');
@@ -73,6 +74,57 @@ const workflowService = {
             };
         } catch (error) {
             throw new Error("Failed to fetch workflow: " + error.message);
+        }
+    },
+
+    runWorkflowById: async ({ workflowId, testBatchId }) => {
+        try {
+            const token = await n8nService.getToken();
+            if (!token.success) {
+                return {
+                    status: 500,
+                    success: false,
+                    message: "Failed to get N8N token: " + token.message,
+                };
+            }
+            const workflowId = await prisma.workflow.findUnique({
+                where: { id }
+            });
+            if (!workflow) {
+                return {
+                    status: 404,
+                    success: false,
+                    message: "Workflow not found",
+                };
+            }
+            const testBatchId = await prisma.testBatch.findUnique({
+                where: { id: testBatchId }
+            });
+            if (!testBatch) {
+                return {
+                    status: 404,
+                    success: false,
+                    message: "Test batch not found",
+                };
+            }
+            const response = await axios.post(
+                `${N8nService.N8N_ENDPOINT}/test-automation/api/v1/workflows/${workflowId}/run`,
+                { testBatchId }, // chỉ gửi testBatchId trong body
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`,
+                    },
+                }
+            );
+            return {
+                status: 200,
+                success: true,
+                message: "Run workflow request sent to n8n successfully",
+                data: response.data,
+            };
+        } catch (error) {
+            throw new Error("Failed to run workflow: " + (error.response?.data?.error || error.message));
         }
     },
 

@@ -99,58 +99,78 @@ const testCaseService = {
     }
   },
 
-  createTestCaseWithNodes: async ({ name, scenarioId, testCaseNodes = [] }) => {
-    try {
-      const testCase = await prisma.testCase.create({
-        data: { name: name ?? null, scenarioId: scenarioId ?? null }
-      });
+  // controller nhận req.body có thể là object hoặc mảng object
+createTestCaseWithNodes: async (body) => {
+  const items = Array.isArray(body) ? body : [body];
+  const result = [];
 
-      if (testCaseNodes.length > 0) {
-        const nodesData = testCaseNodes.map(node => {
-          // Deep clone tránh ảnh hưởng
-          const stepWithoutExpectation = JSON.parse(JSON.stringify(node.step || []));
-          const expectationArr = [];
+  for (const item of items) {
+    const { scenarioId, name, nodes = [] } = item;
 
-          // Duyệt từng step, từng api
-          stepWithoutExpectation.forEach(step => {
-            if (Array.isArray(step.apis)) {
-              step.apis.forEach(api => {
-                if ('expectedResponse' in api) {
-                  // Lưu expectation riêng
-                  expectationArr.push(api.expectedResponse);
-                  // Xóa expectation khỏi inputParam
-                  delete api.expectedResponse;
+    // 1. Tạo testCase
+    const testCase = await prisma.testCase.create({
+      data: { name, scenarioId }
+    });
+
+    // 2. Xử lý node
+    if (nodes.length > 0) {
+      const nodesData = nodes.map(node => {
+        const stepsWithoutExpectation = JSON.parse(JSON.stringify(node.steps || []));
+        const expectationArr = [];
+        // Quét từng step và từng api (giống logic cũ)
+        stepsWithoutExpectation.forEach(step => {
+          if (Array.isArray(step.inputParam)) {
+            // Nếu inputParam là list api, duyệt từng api
+            step.inputParam.forEach(api => {
+              if ('expectedResponse' in step) {
+                // Nếu expectedResponse là mảng, push từng phần tử
+                if (Array.isArray(step.expectedResponse)) {
+                  expectationArr.push(...step.expectedResponse);
+                } else {
+                  expectationArr.push(step.expectedResponse);
                 }
-              });
-            }
-          });
-
-          return {
-            inputParam: stepWithoutExpectation,   // step đã loại expectation
-            expectation: expectationArr,          // chỉ chứa các expectedResponse
-            nodeId: node.nodeId,
-            testCaseId: testCase.id,
-          };
+                delete step.expectedResponse;
+              }
+            });
+          }
         });
-
-        await prisma.testCaseNode.createMany({ data: nodesData, skipDuplicates: true });
-      }
-
-      const fullTestCase = await prisma.testCase.findUnique({
-        where: { id: testCase.id },
-        include: { testCaseNodes: true },
+        return {
+          inputParam: stepsWithoutExpectation,
+          expectation: expectationArr,
+          nodeId: node.nodeId,
+          testCaseId: testCase.id,
+        };
       });
 
-      return {
-        status: 201,
-        success: true,
-        message: "Created test case and nodes successfully",
-        data: fullTestCase,
-      };
-    } catch (error) {
-      throw new Error("Failed to create test case with nodes: " + error.message);
+      // Validate nodeId tồn tại
+      const validNodeIds = await prisma.workflowNode.findMany({
+        where: { nodeId: { in: nodes.map(n => n.nodeId) } },
+        select: { nodeId: true }
+      });
+      const validNodeIdSet = new Set(validNodeIds.map(n => n.nodeId));
+      const invalidNodes = nodes.filter(n => !validNodeIdSet.has(n.nodeId));
+      if (invalidNodes.length > 0) {
+        throw new Error(`Invalid nodeId(s): ${invalidNodes.map(n => n.nodeId).join(", ")}`);
+      }
+      await prisma.testCaseNode.createMany({ data: nodesData, skipDuplicates: true });
     }
-  },
+
+    // 3. Lấy full testcase trả về (nếu cần)
+    const fullTestCase = await prisma.testCase.findUnique({
+      where: { id: testCase.id },
+      include: { testCaseNodes: true }
+    });
+
+    result.push(fullTestCase);
+  }
+
+  return {
+    status: 201,
+    success: true,
+    message: "Created test cases and nodes successfully",
+    data: result
+  };
+},
 
   updateTestCase: async ({ id, name, scenarioId }) => {
     try {
