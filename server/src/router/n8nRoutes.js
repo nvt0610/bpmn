@@ -6,6 +6,7 @@ const router = express.Router();
 const n8nRoutes = (app) => {
   router.get("/testcase/:id", N8nController.getTestCaseById);
   router.post("/testcase/:id/export-workflow", N8nController.export);
+  router.post("/token", N8nController.getToken);
 
   return app.use("/api/v1/n8n", router);
 };

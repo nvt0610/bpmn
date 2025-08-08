@@ -11,6 +11,11 @@ const n8nController = {
     res.status(result.status).json(result);
   },
 
+  getToken: async (req, res) => {
+    const result = await n8nService.getToken();
+    res.status(result.status).json(result);
+  },
+
   getWorkflow: async (req, res) => {
     const result = await n8nService.getWorkflow(req.params.workflowId); // workflowId
     res.status(result.status).json(result);

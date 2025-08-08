@@ -48,6 +48,7 @@ model Workflow {
   jsonContent Json?
 
   workflowNode WorkflowNode[]
+  testCases    TestCase[]
 }
 
 model WorkflowNode {
@@ -102,7 +103,13 @@ model TestCase {
 
   scenarioId   String?   // Khóa ngoại liên kết tới Scenario
   scenario     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  workflowId    String
+  workflow      Workflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
   testCaseNodes TestCaseNode[]
+
+  @@index([workflowId])
 }
 
 model TestCaseNode{

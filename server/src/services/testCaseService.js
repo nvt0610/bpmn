@@ -50,7 +50,7 @@ const testCaseService = {
     }
   },
 
-  createTestCase: async ({ name, scenarioId }) => {
+  createTestCase: async ({ name, workflowId, scenarioId }) => {
     try {
       const existingScenario = await prisma.scenario.findUnique({
         where: { id: scenarioId },
@@ -61,9 +61,19 @@ const testCaseService = {
           message: "Scenario not found",
         };
       }
+      const existingWorkflow = await prisma.scenario.findUnique({
+        where: { id: workflowId },
+      });
+      if (!existingScenario) {
+        return {
+          status: 404,
+          message: "Workflow not found",
+        };
+      }
       const newTestCase = await prisma.testCase.create({
         data: {
           name: name ?? null,
+          workflowId: workflowId ?? null,
           scenarioId: scenarioId ?? null,
         },
       });
@@ -100,77 +110,77 @@ const testCaseService = {
   },
 
   // controller nhận req.body có thể là object hoặc mảng object
-createTestCaseWithNodes: async (body) => {
-  const items = Array.isArray(body) ? body : [body];
-  const result = [];
+  createTestCaseWithNodes: async (body) => {
+    const items = Array.isArray(body) ? body : [body];
+    const result = [];
 
-  for (const item of items) {
-    const { scenarioId, name, nodes = [] } = item;
+    for (const item of items) {
+      const { workflowId, scenarioId, name, nodes = [] } = item;
 
-    // 1. Tạo testCase
-    const testCase = await prisma.testCase.create({
-      data: { name, scenarioId }
-    });
+      // 1. Tạo testCase
+      const testCase = await prisma.testCase.create({
+        data: { name, workflowId, scenarioId }
+      });
 
-    // 2. Xử lý node
-    if (nodes.length > 0) {
-      const nodesData = nodes.map(node => {
-        const stepsWithoutExpectation = JSON.parse(JSON.stringify(node.steps || []));
-        const expectationArr = [];
-        // Quét từng step và từng api (giống logic cũ)
-        stepsWithoutExpectation.forEach(step => {
-          if (Array.isArray(step.inputParam)) {
-            // Nếu inputParam là list api, duyệt từng api
-            step.inputParam.forEach(api => {
-              if ('expectedResponse' in step) {
-                // Nếu expectedResponse là mảng, push từng phần tử
-                if (Array.isArray(step.expectedResponse)) {
-                  expectationArr.push(...step.expectedResponse);
-                } else {
-                  expectationArr.push(step.expectedResponse);
+      // 2. Xử lý node
+      if (nodes.length > 0) {
+        const nodesData = nodes.map(node => {
+          const stepsWithoutExpectation = JSON.parse(JSON.stringify(node.steps || []));
+          const expectationArr = [];
+          // Quét từng step và từng api (giống logic cũ)
+          stepsWithoutExpectation.forEach(step => {
+            if (Array.isArray(step.inputParam)) {
+              // Nếu inputParam là list api, duyệt từng api
+              step.inputParam.forEach(api => {
+                if ('expectedResponse' in step) {
+                  // Nếu expectedResponse là mảng, push từng phần tử
+                  if (Array.isArray(step.expectedResponse)) {
+                    expectationArr.push(...step.expectedResponse);
+                  } else {
+                    expectationArr.push(step.expectedResponse);
+                  }
+                  delete step.expectedResponse;
                 }
-                delete step.expectedResponse;
-              }
-            });
-          }
+              });
+            }
+          });
+          return {
+            inputParam: stepsWithoutExpectation,
+            expectation: expectationArr,
+            nodeId: node.nodeId,
+            testCaseId: testCase.id,
+          };
         });
-        return {
-          inputParam: stepsWithoutExpectation,
-          expectation: expectationArr,
-          nodeId: node.nodeId,
-          testCaseId: testCase.id,
-        };
+
+        // Validate nodeId tồn tại
+        const validNodeIds = await prisma.workflowNode.findMany({
+          where: { nodeId: { in: nodes.map(n => n.nodeId) } },
+          select: { nodeId: true }
+        });
+        const validNodeIdSet = new Set(validNodeIds.map(n => n.nodeId));
+        const invalidNodes = nodes.filter(n => !validNodeIdSet.has(n.nodeId));
+        if (invalidNodes.length > 0) {
+          throw new Error(`Invalid nodeId(s): ${invalidNodes.map(n => n.nodeId).join(", ")}`);
+        }
+        await prisma.testCaseNode.createMany({ data: nodesData, skipDuplicates: true });
+      }
+
+      // 3. Lấy full testcase trả về (nếu cần)
+      const fullTestCase = await prisma.testCase.findUnique({
+        where: { id: testCase.id },
+        include: { testCaseNodes: true }
       });
 
-      // Validate nodeId tồn tại
-      const validNodeIds = await prisma.workflowNode.findMany({
-        where: { nodeId: { in: nodes.map(n => n.nodeId) } },
-        select: { nodeId: true }
-      });
-      const validNodeIdSet = new Set(validNodeIds.map(n => n.nodeId));
-      const invalidNodes = nodes.filter(n => !validNodeIdSet.has(n.nodeId));
-      if (invalidNodes.length > 0) {
-        throw new Error(`Invalid nodeId(s): ${invalidNodes.map(n => n.nodeId).join(", ")}`);
-      }
-      await prisma.testCaseNode.createMany({ data: nodesData, skipDuplicates: true });
+      result.push(fullTestCase);
     }
 
-    // 3. Lấy full testcase trả về (nếu cần)
-    const fullTestCase = await prisma.testCase.findUnique({
-      where: { id: testCase.id },
-      include: { testCaseNodes: true }
-    });
-
-    result.push(fullTestCase);
-  }
-
-  return {
-    status: 201,
-    success: true,
-    message: "Created test cases and nodes successfully",
-    data: result
-  };
-},
+    return {
+      status: 201,
+      success: true,
+      message: "Created test cases and nodes successfully",
+      data: result
+    };
+  },
 
   updateTestCase: async ({ id, name, scenarioId }) => {
     try {

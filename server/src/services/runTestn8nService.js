@@ -6,7 +6,10 @@ const prisma = new PrismaClient();
 
 const runTestn8nService = {
     runWorkflowById: async ({ testBatchId, workflowId }) => {
-        // 1. Check testBatchId bắt buộc
+        // 1. Check bắt buộc
+        if (!workflowId) {
+            return { status: 400, success: false, message: "workflowId is required" };
+        }
         if (!testBatchId) {
             return { status: 400, success: false, message: "testBatchId is required" };
         }
@@ -33,9 +36,7 @@ const runTestn8nService = {
         }
 
         // 5. Lấy endpoint từ env (n8nService.N8N_ENDPOINT)
-        const url = workflowId
-            ? `${n8nService.N8N_ENDPOINT}/test-automation/api/v1/workflows/${workflowId}/run`
-            : `${n8nService.N8N_ENDPOINT}/test-automation/api/v1/workflows/run`;
+        const url = `${n8nService.N8N_ENDPOINT}/test-automation/api/v1/workflows/run`;
 
         // 6. Gửi request đến n8n
         try {
