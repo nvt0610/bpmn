@@ -6,6 +6,9 @@ import { createServer } from "http";
 import initWebRouter from "./router/routers.js";
 import { PrismaClient } from "@prisma/client";
 
+import { keycloak, memoryStore } from "./keycloak-init.js";
+import session from 'express-session';
+
 dotenv.config(); // Load .env đầu tiên
 
 const app = express();
@@ -18,8 +21,24 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
+app.use(session({
+  secret: process.env.SESSION_SECRET || "dev",
+  resave: false,
+  saveUninitialized: true,
+  store: memoryStore
+}));
+app.use(keycloak.middleware());
+
+// JSON hóa lỗi 403 từ keycloak (tuỳ chọn)
+keycloak.accessDenied = (req, res) =>
+  res.status(403).json({ success: false, message: "Forbidden" });
+
+// Gắn req.user sau khi keycloak đã mount
+import { attachUser } from "./middlewares/auth.js";
+app.use(attachUser);
+
 // Init routes
-initWebRouter(app); 
+initWebRouter(app);
 
 // Test route
 app.get("/", (req, res) => {

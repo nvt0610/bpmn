@@ -19,6 +19,7 @@ model User {
   email    String @unique
   password String
   roleId   String
+  createdAt DateTime @default(now())
 
   role              Role                @relation(fields: [roleId], references: [id])
   workflow          Workflow[]
@@ -29,6 +30,7 @@ model Role {
   id    String @id @default(uuid())
   name  String @unique
   users User[]
+  createdAt DateTime @default(now())
 
   configurationData ConfigurationData[]
 }
@@ -37,6 +39,7 @@ model Workflow {
   id         String         @id @default(uuid())
   name       String
   createdAt  DateTime       @default(now())
+  updatedAt DateTime? @updatedAt
   type       VisibilityType @default(GENERAL)
   project    String?
   status     Status         @default(DRAFT)
@@ -56,6 +59,7 @@ model WorkflowNode {
   nodeId     String   @unique // BẮT BUỘC phải unique nếu join qua nodeId
   workflowId String
   workflow   Workflow @relation(fields: [workflowId], references: [id])
+  createdAt DateTime @default(now())
 
   configurationData ConfigurationData[]
 
@@ -85,12 +89,14 @@ model ConfigurationData {
 
 model TestBatch {
   id        String     @id @default(uuid())
+  createdAt DateTime @default(now())
   scenarios Scenario[] // Một batch chứa nhiều scenario
 }
 
 model Scenario {
   id          String     @id @default(uuid())
   name        String
+  createdAt DateTime @default(now())
   testBatchId String?     // Khóa ngoại liên kết tới TestBatch
 
   testBatch   TestBatch?  @relation(fields: [testBatchId], references: [id], onDelete: Cascade)
@@ -100,6 +106,7 @@ model Scenario {
 model TestCase {
   id           String   @id @default(uuid())         
   name         String?
+  createdAt DateTime @default(now())
 
   scenarioId   String?   // Khóa ngoại liên kết tới Scenario
   scenario     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
@@ -117,6 +124,7 @@ model TestCaseNode{
   inputParam     Json?
   expectation    Json?
   result         Json?
+  createdAt DateTime @default(now())
 
   testCaseId  String
   testCase    TestCase       @relation(fields: [testCaseId], references: [id], onDelete: Cascade)

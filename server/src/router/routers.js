@@ -11,6 +11,7 @@ import testBatchRoutes from "./testBatchRoutes.js";
 import testCaseController from "../controllers/testCaseController.js";
 import runTestn8nController from "../controllers/runTestn8nController.js";
 import resultReceiveController from "../controllers/resultReceiveController.js";
+import testCaseNodeController from "../controllers/testCaseNodeController.js";
 
 let initWebRouter = (app) => {
   roleRoutes(app);
@@ -28,7 +29,7 @@ let initWebRouter = (app) => {
   app.post("/api/v1/createwithnodes", testCaseController.createTestCaseWithNodes);
   app.post("/api/v1/batchresultreceive", resultReceiveController.receiveBatchResult);
   app.post("/api/v1/runworkflow", runTestn8nController.runWorkflow);
-
+  app.post("/api/v1/testcasenodeexport", testCaseNodeController.receiveResultTestCaseNode);
 };
 
 export default initWebRouter;

@@ -1,17 +1,13 @@
-FROM node:18-slim
+FROM node:20-alpine
+
+RUN apk add --no-cache python3 make g++ pkgconfig expat-dev
+ENV PYTHON=/usr/bin/python3 \
+    npm_config_python=/usr/bin/python3
 
 WORKDIR /app
-
 COPY package*.json ./
-
-RUN npm install
+RUN npm ci           # dùng ci cho build ổn định
 
 COPY . .
-
-# Generate Prisma Client
-RUN npx prisma generate
-
-EXPOSE 8080
-
-# Start server
+EXPOSE 4000
 CMD ["npm", "run", "dev"]
