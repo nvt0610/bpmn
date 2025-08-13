@@ -23,6 +23,12 @@ const testBatchController = {
     });
     res.status(result.status).json(result);
   },
+  createTestBatchWithTestCase: async (req, res) => {
+    const result = await testBatchService.createTestBatchWithTestCase({
+      ...req.body,
+    });
+    res.status(result.status).json(result);
+  },
 
   deleteTestBatch: async (req, res) => {
     const result = await testBatchService.deleteTestBatch(req.params);

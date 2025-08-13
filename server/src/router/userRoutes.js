@@ -10,7 +10,7 @@ const userRoutes = (app) => {
   router.put("/:id", userController.updateUser);
   router.delete("/:id", userController.deleteUser);
 
-  return app.use("/api/v1/users", router);
+  return app.use("/api/v2/users", router);
 };
 
 export default userRoutes;

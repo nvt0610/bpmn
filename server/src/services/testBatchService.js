@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { Log } from "../helpers/logReceive.js"; // ghi log vào DB, KHÔNG đổi response
 const prisma = new PrismaClient();
 
 const testBatchService = {
@@ -42,58 +43,59 @@ const testBatchService = {
         }
     },
 
-    createTestBatch: async ({ scenarios = [] }) => {
-        try {
-            // Gom tất cả id và name từ FE gửi lên
-            const ids = scenarios.filter(item => item.id).map(item => item.id);
-            const names = scenarios.filter(item => !item.id && item.scenarioName).map(item => item.scenarioName);
+    createTestBatch: async ({ name, description, testCaseIds = [], scenarioIds = [] }) => {
+        await Log.info("Create TestBatch request received", { name, description, testCaseIds, scenarioIds });
 
-            // Lấy tất cả scenario theo id và theo name
-            let foundScenarios = [];
-            if (ids.length > 0) {
-                const byId = await prisma.scenario.findMany({ where: { id: { in: ids } } });
-                foundScenarios = foundScenarios.concat(byId);
-            }
-            if (names.length > 0) {
-                const byName = await prisma.scenario.findMany({ where: { name: { in: names } } });
-                foundScenarios = foundScenarios.concat(byName);
-            }
+        let finalScenarioIds = [...new Set(scenarioIds)];
 
-            // So sánh xem có thiếu scenario nào không
-            const foundIds = foundScenarios.map(s => s.id);
-            const foundNames = foundScenarios.map(s => s.name);
+        // Nếu có testCaseIds thì lấy ra scenarioId từ test case
+        if (testCaseIds.length > 0) {
+            const testCases = await prisma.testCase.findMany({
+                where: { id: { in: testCaseIds } },
+                select: { scenarioId: true },
+            });
 
-            const missingIds = ids.filter(id => !foundIds.includes(id));
-            const missingNames = names.filter(name => !foundNames.includes(name));
-
-            if (missingIds.length > 0 || missingNames.length > 0) {
+            if (testCases.length !== testCaseIds.length) {
+                const foundIds = testCases.map(tc => tc.id);
+                const missing = testCaseIds.filter(id => !foundIds.includes(id));
                 return {
                     status: 400,
                     success: false,
-                    message: "Scenario(s) not found: " +
-                        [...missingIds, ...missingNames].join(", "),
+                    message: `Some testCaseIds are invalid: ${missing.join(", ")}`,
                 };
             }
 
-            // Tạo testBatch và connect các scenario đã có
-            const testBatch = await prisma.testBatch.create({
-                data: {
-                    scenarios: {
-                        connect: foundScenarios.map(s => ({ id: s.id })),
-                    },
-                },
-                include: { scenarios: true },
-            });
-
-            return {
-                status: 201,
-                success: true,
-                message: "TestBatch created successfully",
-                data: testBatch,
-            };
-        } catch (error) {
-            throw new Error("Failed to create test batch: " + error.message);
+            const extractedScenarioIds = testCases.map(tc => tc.scenarioId).filter(Boolean);
+            finalScenarioIds = [...new Set([...finalScenarioIds, ...extractedScenarioIds])];
         }
+
+        // Validate có ít nhất 1 scenarioId
+        if (finalScenarioIds.length === 0) {
+            return {
+                status: 400,
+                success: false,
+                message: "No valid scenarioIds provided",
+            };
+        }
+
+        // Tạo TestBatch
+        const testBatch = await prisma.testBatch.create({
+            data: {
+                name: name || `Batch for ${finalScenarioIds.length} scenario(s)`,
+                description: description || `Auto batch for ${finalScenarioIds.length} scenario(s)`,
+                scenarios: { connect: finalScenarioIds.map(id => ({ id })) },
+            },
+            include: { scenarios: true },
+        });
+
+        await Log.info("TestBatch created", { testBatchId: testBatch.id });
+
+        return {
+            status: 201,
+            success: true,
+            message: "TestBatch created successfully",
+            data: testBatch,
+        };
     },
 
     updateTestBatch: async ({ id, scenarios = [] }) => {

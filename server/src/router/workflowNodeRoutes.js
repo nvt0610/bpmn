@@ -10,7 +10,7 @@ const workflowNodeRoutes = (app) => {
   router.delete("/", workflowNodeController.deleteNode);
   router.put("/", workflowNodeController.updateNode);
 
-  return app.use("/api/v1/workflowNode", router);
+  return app.use("/api/v2/workflowNode", router);
 };
 
 export default workflowNodeRoutes;

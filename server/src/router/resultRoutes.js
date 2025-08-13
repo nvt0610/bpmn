@@ -10,7 +10,7 @@ const resultRoutes = (app) => {
   router.put("/:id", resultController.updateResult);
   router.delete("/:id", resultController.deleteResult);
 
-  return app.use("/api/v1/results", router);
+  return app.use("/api/v2/results", router);
 };
 
 export default resultRoutes;

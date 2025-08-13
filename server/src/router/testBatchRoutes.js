@@ -10,7 +10,7 @@ const testBatchRoutes = (app) => {
   router.put("/:id", testBatchController.updateTestBatch);
   router.delete("/:id", testBatchController.deleteTestBatch);
 
-  return app.use("/api/v1/testbatch", router);
+  return app.use("/api/v2/testbatch", router);
 };
 
 export default testBatchRoutes;

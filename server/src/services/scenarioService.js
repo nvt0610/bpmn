@@ -50,29 +50,40 @@ const scenarioService = {
         }
     },
 
-    createScenario: async ({ name, testBatchId }) => {
+    createScenario: async ({ name, testBatchId, testCaseIds = [] }) => {
         try {
-            // Optional: Kiểm tra trùng tên trong cùng testBatch
-            const scenario = await prisma.scenario.create({
-                data: {
-                    name,
-                    testBatchId: typeof testBatchId === "undefined" ? null : testBatchId,
-                },
+            const result = await prisma.$transaction(async (tx) => {
+                // 1. Tạo scenario
+                const scenario = await tx.scenario.create({
+                    data: {
+                        name,
+                        testBatchId: testBatchId ?? null,
+                    },
+                });
 
+                // 2. Nếu có testCaseIds => gán scenarioId cho các test case
+                if (Array.isArray(testCaseIds) && testCaseIds.length > 0) {
+                    await tx.testCase.updateMany({
+                        where: { id: { in: testCaseIds } },
+                        data: { scenarioId: scenario.id },
+                    });
+                }
+
+                return scenario;
             });
 
             return {
                 status: 201,
                 success: true,
                 message: "Scenario created successfully",
-                data: scenario,
+                data: result,
             };
         } catch (error) {
             throw new Error("Failed to create scenario: " + error.message);
         }
     },
 
-    updateScenario: async ({ id, name, testBatchId }) => {
+    updateScenario: async ({ id, name, testBatchId, testCaseIds }) => {
         try {
             const scenario = await prisma.scenario.findUnique({ where: { id } });
             if (!scenario) {
@@ -83,16 +94,41 @@ const scenarioService = {
                 };
             }
 
-            const updated = await prisma.scenario.update({
-                where: { id },
-                data: { name, testBatchId },
+            const result = await prisma.$transaction(async (tx) => {
+                // 1. Update scenario info
+                const updatedScenario = await tx.scenario.update({
+                    where: { id },
+                    data: {
+                        ...(name !== undefined && { name }),
+                        ...(testBatchId !== undefined && { testBatchId }),
+                    },
+                });
+
+                // 2. Nếu gửi testCaseIds => update link test cases
+                if (Array.isArray(testCaseIds)) {
+                    // Gỡ link test case cũ
+                    await tx.testCase.updateMany({
+                        where: { scenarioId: id },
+                        data: { scenarioId: null },
+                    });
+
+                    // Link test case mới
+                    if (testCaseIds.length > 0) {
+                        await tx.testCase.updateMany({
+                            where: { id: { in: testCaseIds } },
+                            data: { scenarioId: id },
+                        });
+                    }
+                }
+
+                return updatedScenario;
             });
 
             return {
                 status: 200,
                 success: true,
                 message: "Scenario updated successfully",
-                data: updated,
+                data: result,
             };
         } catch (error) {
             throw new Error("Failed to update scenario: " + error.message);

@@ -14,131 +14,255 @@ datasource db {
 }
 
 model User {
-  id       String @id @default(uuid())
-  username String @unique
-  email    String @unique
-  password String
-  roleId   String
-  createdAt DateTime @default(now())
+  id                String              @id @default(uuid())
+  username          String              @unique
+  email             String              @unique
+  password          String
+  roleId            String
+  createdAt         DateTime            @default(now())
 
-  role              Role                @relation(fields: [roleId], references: [id])
-  workflow          Workflow[]
   configurationData ConfigurationData[]
+  updatedWorkflows         Workflow[]          @relation("WorkflowUpdatedBy")
+  updatedConfigurationData ConfigurationData[] @relation("ConfigUpdatedBy")
+
+  role     Role       @relation(fields: [roleId], references: [id])
+  workflow Workflow[]
+  testCase TestCase[]
+  result   Result[]
+
+  @@index([roleId])
+  @@index([createdAt])
 }
 
 model Role {
-  id    String @id @default(uuid())
-  name  String @unique
-  users User[]
+  id        String   @id @default(uuid())
+  name      String   @unique
+  users     User[]
   createdAt DateTime @default(now())
-
-  configurationData ConfigurationData[]
 }
 
 model Workflow {
-  id         String         @id @default(uuid())
-  name       String
-  createdAt  DateTime       @default(now())
-  updatedAt DateTime? @updatedAt
-  type       VisibilityType @default(GENERAL)
-  project    String?
-  status     Status         @default(DRAFT)
-  workflowId String?        @db.VarChar(100)
-  userId     String
-  user       User           @relation(fields: [userId], references: [id])
+  id          String         @id @default(uuid())
+  name        String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id])
+  
+  description String?
+  status      Status         @default(DRAFT)
+
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+  
+  updatedId String?
+  updatedBy User? @relation("WorkflowUpdatedBy", fields: [updatedId], references: [id])
 
   xmlContent  String?
   jsonContent Json?
 
   workflowNode WorkflowNode[]
   testCases    TestCase[]
+
+  results     Result[]   // 🔹 back-relation
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Project {
+  id         String   @id @default(uuid())
+  name       String
+  description String
+
+  workflows Workflow[]
 }
 
 model WorkflowNode {
   id         String   @id @default(uuid())
-  nodeId     String   @unique // BẮT BUỘC phải unique nếu join qua nodeId
+  nodeId     String
   workflowId String
+  name       String?
   workflow   Workflow @relation(fields: [workflowId], references: [id])
-  createdAt DateTime @default(now())
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   configurationData ConfigurationData[]
 
   testCaseNodes TestCaseNode[] // Không cần đặt tên relation
 
+  results     Result[]   // 🔹 back-relation
+
   @@unique([workflowId, nodeId])
+  @@index([workflowId])
+  @@index([nodeId])
+  @@index([createdAt])
 }
 
 model ConfigurationData {
   id             String   @id @default(uuid())
   workflowNodeId String
-  userId         String
-  roleId         String
   description    String?
   data           Json?
+  formatData     Json?
   attachments    String[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workflowNode WorkflowNode @relation(fields: [workflowNodeId], references: [id])
+  userId       String
   user         User         @relation(fields: [userId], references: [id])
-  role         Role         @relation(fields: [roleId], references: [id])
 
-  @@unique([workflowNodeId, userId, roleId])
+  updatedId String?
+  updatedBy User? @relation("ConfigUpdatedBy", fields: [updatedId], references: [id])
+
+  workflowNode WorkflowNode @relation(fields: [workflowNodeId], references: [id])
+
+  @@unique([workflowNodeId, userId])
+  @@index([workflowNodeId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model TestBatch {
   id        String     @id @default(uuid())
-  createdAt DateTime @default(now())
+  name      String?
+  description String?
+  createdAt DateTime   @default(now())
   scenarios Scenario[] // Một batch chứa nhiều scenario
+  updatedAt DateTime   @updatedAt
+
+  results     Result[]   // 🔹 back-relation
+
+  @@index([createdAt])
 }
 
 model Scenario {
-  id          String     @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
-  createdAt DateTime @default(now())
-  testBatchId String?     // Khóa ngoại liên kết tới TestBatch
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  testBatchId String? // Khóa ngoại liên kết tới TestBatch
 
-  testBatch   TestBatch?  @relation(fields: [testBatchId], references: [id], onDelete: Cascade)
-  testCases   TestCase[] // Một Scenario chứa nhiều TestCase
+  testBatch TestBatch? @relation(fields: [testBatchId], references: [id], onDelete: Cascade)
+  testCases TestCase[] // Một Scenario chứa nhiều TestCase
+
+  results     Result[]   // 🔹 back-relation
+
+  @@index([testBatchId])
+  @@index([createdAt])
 }
 
 model TestCase {
-  id           String   @id @default(uuid())         
-  name         String?
+  id        String   @id @default(uuid())
+  name      String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  scenarioId   String?   // Khóa ngoại liên kết tới Scenario
-  scenario     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  scenarioId String? // Khóa ngoại liên kết tới Scenario
+  scenario   Scenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
 
-  workflowId    String
-  workflow      Workflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  userId String 
+  user        User           @relation(fields: [userId], references: [id])
+
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  results     Result[]   // 🔹 back-relation
 
   testCaseNodes TestCaseNode[]
 
   @@index([workflowId])
+  @@index([scenarioId])
+  @@index([createdAt])
 }
 
-model TestCaseNode{
-  id             String   @id @default(uuid())
-  inputParam     Json?
-  expectation    Json?
+model TestCaseNode {
+  id              String    @id @default(uuid())
+  inputParam      Json?
+  formatParam     Json?
+  expectation     Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  resultReceiveAt DateTime?
+  name            String?
+
+  results     Result[]   // 🔹 back-relation
+
+  testCaseId String
+  testCase   TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  workflowNodeId String
+  workflowNode   WorkflowNode @relation(fields: [workflowNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([testCaseId, workflowNodeId])
+  @@index([testCaseId])
+  @@index([workflowNodeId])
+  @@index([createdAt])
+  @@index([resultReceiveAt])
+}
+
+model Result {
+  id             String         @id @default(uuid()) // thêm id cho dễ quản lý
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // ===== Các khoá ngoại =====
+  testBatchId    String
+  testBatch      TestBatch      @relation(fields: [testBatchId], references: [id])
+
+  scenarioId     String
+  scenario       Scenario       @relation(fields: [scenarioId], references: [id])
+
+  testCaseId     String
+  testCase       TestCase       @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  testCaseNodeId String
+  testCaseNode   TestCaseNode   @relation(fields: [testCaseNodeId], references: [id])
+
+  workflowId     String
+  workflow       Workflow       @relation(fields: [workflowId], references: [id])
+
+  workflowNodeId String
+  workflowNode   WorkflowNode   @relation(fields: [workflowNodeId], references: [id])
+
+  userId         String       // ai chạy test
+  user           User         @relation(fields: [userId], references: [id])
+
+  // ===== Dữ liệu kết quả =====
   result         Json?
-  createdAt DateTime @default(now())
 
-  testCaseId  String
-  testCase    TestCase       @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
-
-  nodeId      String         // BPMN node id
-
-  workflowNode WorkflowNode  @relation(fields: [nodeId], references: [nodeId], onDelete: Cascade)
-
-  @@unique([testCaseId, nodeId])
+  @@index([testBatchId])
+  @@index([scenarioId])
+  @@index([testCaseId])
+  @@index([testCaseNodeId])
+  @@index([workflowId])
+  @@index([workflowNodeId])
 }
 
-enum VisibilityType {
-  GENERAL
-  ROLE_BASED
+
+model AppLog {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  message       String   @db.Text
+  level         LogLevel @default(INFO)
+  context       Json? // payload/error stack bất kỳ
+  correlationId String? // group theo 1 request/flow
+  source        String? // api/worker/n8n...
+
+  @@index([createdAt])
+  @@index([level, createdAt])
+  @@index([correlationId])
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
 }
 
 enum Status {

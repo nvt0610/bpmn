@@ -1,10 +1,48 @@
 // services/batchResult.service.js
-import { PrismaClient } from "@prisma/client";
-import { convertParams } from "../helpers/convertParam.js"; // đảm bảo bản convertParams có xử lý values: [] như đã sửa
+import { PrismaClient, Prisma } from "@prisma/client"; // <- thêm Prisma
+import {
+    convertParams,
+    mapToDTO,
+    includeSelect,
+    buildWhereFromFilters
+} from "../helpers/helper.js";
 
 const prisma = new PrismaClient();
 
+const BASE_QUERY = { include: includeSelect, orderBy: { createdAt: 'desc' } };
+
+async function queryWithPaging(where, { page = 1, pageSize = 50 } = {}) {
+    const p = Math.max(+page || 1, 1);
+    const ps = Math.min(Math.max(+pageSize || 50, 1), 200);
+    const [items, total] = await Promise.all([
+        prisma.testCaseNode.findMany({ where, ...BASE_QUERY, skip: (p - 1) * ps, take: ps }),
+        prisma.testCaseNode.count({ where })
+    ]);
+    return { page: p, pageSize: ps, total, items: items.map(mapToDTO) };
+}
+
 const testCaseNodeService = {
+    async getAllResults({ page, pageSize } = {}) {
+        const where = { result: { not: Prisma.AnyNull } };
+        const data = await queryWithPaging(where, { page, pageSize });
+        return { status: 200, success: true, message: "Fetched results successfully", data };
+    },
+
+    async getResultByIds(filters = {}) {
+        const where = buildWhereFromFilters(filters);
+        if (!Object.keys(where).length) {
+            return {
+                status: 400, success: false,
+                message: "Cần ít nhất một filter: testCaseNodeId | testBatchId | scenarioId | testCaseId | workflowId | workflowNodeId | nodeId"
+            };
+        }
+        const items = await prisma.testCaseNode.findMany({ where, ...BASE_QUERY });
+        return {
+            status: 200, success: true,
+            message: "Fetched results by filters successfully",
+            data: items.map(mapToDTO)
+        };
+    },
     async exportInputToN8n({ batchId, scenarios = [] }) {
         const errors = [];
         if (!batchId || !Array.isArray(scenarios) || !scenarios.length) {
@@ -116,7 +154,7 @@ const testCaseNodeService = {
             sent: sentInputs.length,
             sentInputs
         };
-    }
+    },
 };
 
 export default testCaseNodeService;

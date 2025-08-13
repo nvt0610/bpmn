@@ -1,48 +1,32 @@
 import { PrismaClient } from "@prisma/client";
 import n8nService from "./n8nService.js";
 import axios from "axios";
+import { Log } from "../helpers/logReceive.js"; // 🔹 Import Log
+
 
 const prisma = new PrismaClient();
 
 const runTestn8nService = {
-    runWorkflowById: async ({ testBatchId, workflowId }) => {
-        // 1. Check bắt buộc
-        if (!workflowId) {
-            return { status: 400, success: false, message: "workflowId is required" };
-        }
+    runWorkflow: async ({ testBatchId }) => {
+        // 1. Validate bắt buộc
         if (!testBatchId) {
             return { status: 400, success: false, message: "testBatchId is required" };
         }
-
-        // 2. Nếu workflowId có thì check DB
-        if (workflowId) {
-            const workflow = await prisma.workflow.findUnique({ where: { id: workflowId } });
-            if (!workflow) {
-                return { status: 404, success: false, message: "Workflow not found" };
-            }
-        }
-
-        // 3. Check testBatchId tồn tại
-        const testBatch = await prisma.testBatch.findUnique({ where: { id: testBatchId } });
-        if (!testBatch) {
-            return { status: 404, success: false, message: "Test batch not found" };
-        }
-
-        // 4. Lấy token đúng cách
+        await Log.info("Run workflow request received", { testBatchId });
+        // 6. Giữ nguyên phần lấy token
         const tokenResponse = await n8nService.getToken();
         const token = tokenResponse?.data?.access_token;
         if (!token) {
             return { status: 500, success: false, message: "Failed to get N8N access token" };
         }
 
-        // 5. Lấy endpoint từ env (n8nService.N8N_ENDPOINT)
+        // 7. Lấy endpoint từ env (n8nService.N8N_ENDPOINT)
         const url = `${n8nService.N8N_ENDPOINT}/test-automation/api/v1/workflows/run`;
+        await Log.info("Sending run request to n8n", { url, testBatchId });
 
-        // 6. Gửi request đến n8n
+        // 8. Giữ nguyên phần push sang n8n
         try {
-            const response = await axios.post(
-                url,
-                { testBatchId },
+            const response = await axios.post(url, { testBatchId },
                 {
                     headers: {
                         "Content-Type": "application/json",
@@ -50,6 +34,7 @@ const runTestn8nService = {
                     },
                 }
             );
+            await Log.info("Run workflow request sent to n8n successfully", { testBatchId });
             return {
                 status: 200,
                 success: true,
@@ -57,14 +42,17 @@ const runTestn8nService = {
                 data: response.data,
             };
         } catch (error) {
-            return {
+            await Log.error("Failed to run workflow via n8n", {
+                error: error.response?.data || error.message,
+                testBatchId,
+            }); return {
                 status: error.response?.status || 500,
                 success: false,
                 message: "Failed to run workflow: " + (error.response?.data?.error || error.message),
                 n8nError: error.response?.data,
             };
         }
-    }
+    },
 };
 
 export default runTestn8nService;

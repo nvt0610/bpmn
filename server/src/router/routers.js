@@ -12,24 +12,30 @@ import testCaseController from "../controllers/testCaseController.js";
 import runTestn8nController from "../controllers/runTestn8nController.js";
 import resultReceiveController from "../controllers/resultReceiveController.js";
 import testCaseNodeController from "../controllers/testCaseNodeController.js";
+import resultController from "../controllers/resultController.js";
+
 
 let initWebRouter = (app) => {
   roleRoutes(app);
   userRoutes(app);
   workflowRoutes(app);
   configurationDataRoutes(app);
-  n8nRoutes(app);
+  //n8nRoutes(app);
   workflowNodeRoutes(app);
   resultRoutes(app);
   scenarioRoutes(app);
   testCaseRoutes(app);
   testBatchRoutes(app);
 
-  app.post("/api/v1/testcaseresultreceive", testCaseController.receiveResultTestCase);
-  app.post("/api/v1/createwithnodes", testCaseController.createTestCaseWithNodes);
-  app.post("/api/v1/batchresultreceive", resultReceiveController.receiveBatchResult);
-  app.post("/api/v1/runworkflow", runTestn8nController.runWorkflow);
-  app.post("/api/v1/testcasenodeexport", testCaseNodeController.receiveResultTestCaseNode);
+  //app.post("/api/v2/testcaseresultreceive", testCaseController.receiveResultTestCase);
+
+  app.post("/api/v2/batchresultreceive", resultReceiveController.receiveBatchResult);
+  app.post("/api/v2/runworkflow", runTestn8nController.runWorkflow);
+
+  app.post("/api/v2/testcasenodeexport", testCaseNodeController.exportInputToN8n);
+  app.get("/api/v2/testcasenoderesults", testCaseNodeController.getAllResults);
+  app.get("/api/v2/testcasenoderesults/ids", testCaseNodeController.getResultByIds);
+  app.get("/api/v2/test-batches/summary", resultController.getTestBatchSummary);
 };
 
 export default initWebRouter;

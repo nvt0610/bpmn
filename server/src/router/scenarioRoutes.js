@@ -10,7 +10,7 @@ const scenarioRoutes = (app) => {
   router.put("/:id", scenarioController.updateScenario);
   router.delete("/:id", scenarioController.deleteScenario);
 
-  return app.use("/api/v1/scenarios", router);
+  return app.use("/api/v2/scenarios", router);
 };
 
 export default scenarioRoutes;

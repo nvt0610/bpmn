@@ -28,6 +28,13 @@ const resultController = {
     const result = await resultService.deleteResult(req.params);
     res.status(result.status).json(result);
   },
+
+  getTestBatchSummary: async (req, res) => {
+    const { workflowId, status, page, pageSize } = req.query || {};
+    const result = await resultService.getTestBatchSummary({ workflowId, status, page, pageSize });
+    res.status(result.status).json(result);
+  },
+
 };
 
 export default resultController;

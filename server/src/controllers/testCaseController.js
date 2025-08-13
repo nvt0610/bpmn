@@ -11,11 +11,6 @@ const testCaseController = {
     res.status(result.status).json(result);
   },
 
-  createTestCaseWithNodes: async (req, res) => {
-    const result = await testCaseService.createTestCaseWithNodes(req.body);
-    res.status(result.status).json(result);
-  },
-
   createTestCase: async (req, res) => {
     const result = await testCaseService.createTestCase(req.body);
     res.status(result.status).json(result);
