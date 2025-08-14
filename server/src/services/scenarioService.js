@@ -50,18 +50,31 @@ const scenarioService = {
         }
     },
 
-    createScenario: async ({ name, testBatchId, testCaseIds = [] }) => {
+    createScenario: async ({ name, scenarioId, testBatchId, testCaseIds = [] }) => {
         try {
             const result = await prisma.$transaction(async (tx) => {
-                // 1. Tạo scenario
-                const scenario = await tx.scenario.create({
-                    data: {
-                        name,
-                        testBatchId: testBatchId ?? null,
-                    },
-                });
+                let scenario;
 
-                // 2. Nếu có testCaseIds => gán scenarioId cho các test case
+                if (scenarioId) {
+                    // 🔹 Update scenario có sẵn
+                    scenario = await tx.scenario.update({
+                        where: { id: scenarioId },
+                        data: {
+                            ...(name && { name }),
+                            ...(testBatchId && { testBatchId })
+                        },
+                    });
+                } else {
+                    // 🔹 Tạo mới scenario
+                    scenario = await tx.scenario.create({
+                        data: {
+                            name,
+                            testBatchId: testBatchId ?? null,
+                        },
+                    });
+                }
+
+                // 🔹 Gán testCaseIds cho scenario
                 if (Array.isArray(testCaseIds) && testCaseIds.length > 0) {
                     await tx.testCase.updateMany({
                         where: { id: { in: testCaseIds } },
@@ -73,13 +86,15 @@ const scenarioService = {
             });
 
             return {
-                status: 201,
+                status: scenarioId ? 200 : 201,
                 success: true,
-                message: "Scenario created successfully",
+                message: scenarioId
+                    ? "Scenario updated successfully"
+                    : "Scenario created successfully",
                 data: result,
             };
         } catch (error) {
-            throw new Error("Failed to create scenario: " + error.message);
+            throw new Error("Failed to create/update scenario: " + error.message);
         }
     },
 

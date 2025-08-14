@@ -171,15 +171,15 @@ const configurationDataService = {
         }
         let workflowNodeIds = [];
         if (workflowId) {
+            const workflowExists = await prisma.workflow.findUnique({ where: { id: workflowId } });
+            if (!workflowExists) {
+                await Log.warn("Workflow not found", { workflowId });
+                return { status: 404, success: false, message: "Workflow not found" };
+            }
+
             const nodeFilter = nodeId ? { workflowId, nodeId } : { workflowId };
             const workflowNodes = await prisma.workflowNode.findMany({ where: nodeFilter, select: { id: true } });
             workflowNodeIds = workflowNodes.map((n) => n.id);
-        }
-
-        let isQC = false;
-        if (userId) {
-            const user = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
-            if (user?.role?.name === "QC") isQC = true;
         }
 
         let records = [];
@@ -194,8 +194,7 @@ const configurationDataService = {
         } else {
             records = await prisma.configurationData.findMany({
                 where: {
-                    ...(workflowNodeIds.length && { workflowNodeId: { in: workflowNodeIds } }),
-                    ...(userId && !isQC ? { userId } : {})
+                    ...(workflowNodeIds.length && { workflowNodeId: { in: workflowNodeIds } })
                 }
             });
         }
@@ -261,7 +260,7 @@ const configurationDataService = {
                     results.push({ status: 400, success: false, message: "Missing nodeid in item" });
                     continue;
                 }
-
+                // 1️⃣ Tìm workflowNode.id từ nodeId + workflowId
                 const wfNode = await prisma.workflowNode.findUnique({
                     where: { workflowId_nodeId: { workflowId, nodeId } },
                 });
@@ -270,27 +269,37 @@ const configurationDataService = {
                     continue;
                 }
 
-                // check tồn tại
-                const existing = await prisma.configurationData.findFirst({
-                    where: { workflowNodeId: wfNode.id, userId },
+                // 2️⃣ Check configurationData tồn tại cho workflowNode.id (không cần userId)
+                const existingConfig = await prisma.configurationData.findFirst({
+                    where: { workflowNodeId: wfNode.id },
                 });
-                if (existing) {
-                    results.push({ status: 409, success: false, message: "ConfigurationData already exists", nodeId });
-                    continue;
-                }
 
                 const { nodeid: _omit, ...nodeData } = item;
                 const fmt = buildFormatDataFromConfigData(nodeData) || null;
 
-                const record = await prisma.configurationData.create({
-                    data: {
-                        workflowNodeId: wfNode.id,
-                        userId,
-                        data: nodeData,
-                        formatData: fmt,
-                    },
-                });
-                results.push({ status: 201, success: true, message: "Created new", nodeId, data: unwrapData(record) });
+                if (existingConfig) {
+                    // 3️⃣ Nếu tồn tại → update
+                    const updated = await prisma.configurationData.update({
+                        where: { id: existingConfig.id },
+                        data: {
+                            data: nodeData,
+                            formatData: fmt,
+                            updatedId: userId, // ai update
+                        },
+                    });
+                    results.push({ status: 200, success: true, message: "Updated existing", nodeId, data: unwrapData(updated) });
+                } else {
+                    // 4️⃣ Nếu chưa tồn tại → create
+                    const created = await prisma.configurationData.create({
+                        data: {
+                            workflowNodeId: wfNode.id,
+                            userId, // vẫn lưu ai tạo
+                            data: nodeData,
+                            formatData: fmt,
+                        },
+                    });
+                    results.push({ status: 201, success: true, message: "Created new", nodeId, data: unwrapData(created) });
+                }
             }
 
             return { status: 207, success: true, message: "Processed all nodeIds", data: results };

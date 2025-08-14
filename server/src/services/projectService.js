@@ -1,97 +1,112 @@
+// services/projectService.js
 import { PrismaClient } from "@prisma/client";
+import { Log } from "../helpers/logReceive.js"; // <-- import log helper
 const prisma = new PrismaClient();
 
 const projectService = {
-  getAllProjects: async () => {
+  getAll: async () => {
     try {
       const projects = await prisma.project.findMany({
-        include: { workflows: true },
+        orderBy: { name: "asc" },
+        include: { workflows: { select: { id: true, name: true } } },
       });
-      return {
-        message: "Projects fetched successfully",
-        data: projects,
-      };
+
+      await Log.info("Fetched all projects successfully", { count: projects.length });
+      return { status: 200, message: "Fetched all projects successfully", data: projects };
     } catch (error) {
-      throw new Error("Failed to fetch projects: " + error.message);
+      await Log.error("Failed to fetch projects", { error: error.message });
+      return { status: 500, message: error.message, data: null };
     }
   },
 
-  getProjectById: async ({ id }) => {
+  getById: async (id) => {
     try {
       const project = await prisma.project.findUnique({
         where: { id },
-        include: { workflows: true },
+        include: { workflows: { select: { id: true, name: true } } },
       });
 
       if (!project) {
-        return { message: "Project not found" };
+        await Log.warn("Project not found", { id });
+        return { status: 404, message: "Project not found", data: null };
       }
 
-      return {
-        message: "Project fetched successfully",
-        data: project,
-      };
+      await Log.info("Fetched project successfully", { id });
+      return { status: 200, message: "Fetched project successfully", data: project };
     } catch (error) {
-      throw new Error("Failed to fetch project: " + error.message);
+      await Log.error("Failed to fetch project", { id, error: error.message });
+      return { status: 500, message: error.message, data: null };
     }
   },
 
-  createProject: async ({ name, description }) => {
+  create: async (payload) => {
     try {
-      const existing = await prisma.project.findFirst({
-        where: { name },
-      });
+      const { name, description, workflowIds = [] } = payload;
 
-      if (existing) {
-        return { message: "Project name already exists" };
+      const exists = await prisma.project.findFirst({ where: { name } });
+      if (exists) {
+        await Log.warn("Project name already exists", { name });
+        return { status: 409, message: "Project name already exists", data: null };
       }
 
-      const project = await prisma.project.create({
-        data: { name, description },
+      const newProject = await prisma.project.create({
+        data: {
+          name,
+          description,
+          workflows: { connect: workflowIds.map(id => ({ id })) }
+        },
+        include: { workflows: { select: { id: true, name: true } } }
       });
 
-      return {
-        message: "Project created successfully",
-        data: project,
-      };
+      await Log.info("Project created successfully", { id: newProject.id, name });
+      return { status: 201, message: "Project created successfully", data: newProject };
     } catch (error) {
-      throw new Error("Failed to create project: " + error.message);
+      await Log.error("Failed to create project", { payload, error: error.message });
+      return { status: 500, message: error.message, data: null };
     }
   },
 
-  updateProject: async ({ id, name, description }) => {
+  update: async (id, payload) => {
     try {
-      const project = await prisma.project.findUnique({ where: { id } });
-      if (!project) {
-        return { message: "Project not found" };
+      const { workflowIds, ...rest } = payload;
+
+      const exists = await prisma.project.findUnique({ where: { id } });
+      if (!exists) {
+        await Log.warn("Project not found for update", { id });
+        return { status: 404, message: "Project not found", data: null };
       }
 
       const updated = await prisma.project.update({
         where: { id },
-        data: { name, description },
+        data: {
+          ...rest,
+          ...(workflowIds ? { workflows: { set: workflowIds.map(wid => ({ id: wid })) } } : {})
+        },
+        include: { workflows: { select: { id: true, name: true } } }
       });
 
-      return {
-        message: "Project updated successfully",
-        data: updated,
-      };
+      await Log.info("Project updated successfully", { id });
+      return { status: 200, message: "Project updated successfully", data: updated };
     } catch (error) {
-      throw new Error("Failed to update project: " + error.message);
+      await Log.error("Failed to update project", { id, payload, error: error.message });
+      return { status: 500, message: error.message, data: null };
     }
   },
 
-  deleteProject: async ({ id }) => {
+  delete: async (id) => {
     try {
-      const project = await prisma.project.findUnique({ where: { id } });
-      if (!project) {
-        return { message: "Project not found" };
+      const exists = await prisma.project.findUnique({ where: { id } });
+      if (!exists) {
+        await Log.warn("Project not found for delete", { id });
+        return { status: 404, message: "Project not found", data: null };
       }
 
       await prisma.project.delete({ where: { id } });
-
-      return { message: "Project deleted successfully" };
+      await Log.info("Project deleted successfully", { id });
+      return { status: 200, message: "Project deleted successfully", data: null };
     } catch (error) {
-      throw new Error("Failed to delete project: " + error.message);
+      await Log.error("Failed to delete project", { id, error: error.message });
+      return { status: 500, message: error.message, data: null };
     }
   },
 };

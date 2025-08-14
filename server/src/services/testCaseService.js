@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { Log } from "../helpers/logReceive.js"; // ghi log vào DB, KHÔNG đổi response
 import { normalizeStepsV2 } from "../helpers/format-mapper.js";
+import { getPaginationParams } from "../helpers/pagination.js";
 
 const prisma = new PrismaClient();
 
@@ -17,13 +18,106 @@ const canonicalize = (v) => {
 
 const testCaseService = {
 
+  getListTestCases: async ({ page, pageSize, workflowId }) => {
+    const { skip, take, page: pageNum, pageSize: sizeNum } = getPaginationParams({ page, pageSize });
+
+    // Tạo điều kiện lọc
+    const where = {};
+    if (workflowId) {
+      where.workflowId = workflowId;
+    }
+
+    // 1 Lấy danh sách test case + tổng số
+    const [testCases, total] = await Promise.all([
+      prisma.testCase.findMany({
+        where, // 🔹 áp dụng filter workflowId
+        select: {
+          id: true,
+          name: true,
+          createdAt: true,
+          workflowId: true, // 🔹 thêm để trả workflowId
+          workflow: { select: { name: true } }, // 🔹 nếu muốn có cả tên workflow
+          scenario: {
+            select: {
+              id: true,
+              name: true,
+              testBatch: {
+                select: {
+                  user: { select: { id: true, username: true } }
+                }
+              }
+            }
+          },
+          _count: { select: { testCaseNodes: true, results: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take
+      }),
+      prisma.testCase.count({ where }) // 🔹 count cũng filter
+    ]);
+
+    if (!testCases.length) {
+      return { page: pageNum, pageSize: sizeNum, total: 0, items: [] };
+    }
+
+    const testCaseIds = testCases.map(tc => tc.id);
+
+    // 2️⃣ Lấy toàn bộ result để check pass/fail
+    const results = await prisma.result.findMany({
+      where: { testCaseId: { in: testCaseIds } },
+      select: { testCaseId: true, result: true }
+    });
+
+    // 3️⃣ Xác định keyword pass/fail
+    const passKeywords = ["ok", "pass", "success", "complete"];
+    const failKeywords = ["error", "fail"];
+
+    const passMap = {};
+    const failMap = {};
+
+    results.forEach(r => {
+      const rawText = JSON.stringify(r.result || {}).toLowerCase();
+
+      if (passKeywords.some(k => rawText.includes(k))) {
+        passMap[r.testCaseId] = (passMap[r.testCaseId] || 0) + 1;
+      } else if (failKeywords.some(k => rawText.includes(k))) {
+        failMap[r.testCaseId] = (failMap[r.testCaseId] || 0) + 1;
+      }
+    });
+    // 4️⃣ Map dữ liệu trả ra
+    const items = testCases.map(tc => {
+      const totalRuns = tc._count.results;
+      const passCount = passMap[tc.id] || 0;
+      const failCount = failMap[tc.id] || 0;
+
+      return {
+        testCaseId: tc.id,
+        testCaseName: tc.name,
+        workflowId: tc.workflowId, // 🔹 thêm vào response
+        workflowName: tc.workflow?.name || null, // 🔹 nếu muốn cả tên
+        scenarioId: tc.scenario?.id || null,
+        scenarioName: tc.scenario?.name || null,
+        createdBy: tc.scenario?.testBatch?.user?.username || null, // 🔹 Lấy từ TestBatch
+        createdById: tc.scenario?.testBatch?.user?.id || null, // 🔹 Lấy từ TestBatch
+        numberOfTestCaseNode: tc._count.testCaseNodes,
+        totalTestRuns: totalRuns,
+        passCount,
+        failCount,
+        passSummary: `${passCount}/${totalRuns}`,
+        createdAt: tc.createdAt
+      };
+    });
+
+    return { page: pageNum, pageSize: sizeNum, total, items };
+  },
+
   getAllTestCases: async () => {
     try {
       const data = await prisma.testCase.findMany({
         include: {
           scenario: true,
           workflow: { select: { id: true, name: true } },
-          user: { select: { id: true, username: true } }, // 🔹 Thêm user
           testCaseNodes: true
         },
         orderBy: { createdAt: "desc" }
@@ -66,7 +160,6 @@ const testCaseService = {
                 id: true,
                 createdAt: true,
                 result: true,
-                user: { select: { username: true } }
               }
             }
           },
@@ -98,7 +191,7 @@ const testCaseService = {
 
     try {
       for (const item of items) {
-        const { workflowId, scenarioId, name, userId, nodes } = item;
+        const { workflowId, scenarioId, name, nodes } = item;
         const testCaseIdInput = item.testCaseId ?? item.testcaseId ?? item.id ?? null;
 
         const data = await prisma.$transaction(async (tx) => {
@@ -113,16 +206,11 @@ const testCaseService = {
                 const sc = await tx.scenario.findUnique({ where: { id: scenarioId } });
                 if (!sc) throw new Error("Scenario not found");
               }
-              if (userId) {
-                const user = await tx.user.findUnique({ where: { id: userId } });
-                if (!user) throw new Error("User not found");
-              }
 
               testCase = await tx.testCase.update({
                 where: { id: testCaseIdInput },
                 data: {
                   ...(name !== undefined ? { name } : {}),
-                  ...(userId !== undefined ? { userId } : {}),
                   ...(scenarioId !== undefined ? { scenarioId } : {}),
                   ...(workflowId !== undefined ? { workflowId } : {}),
                 },
@@ -137,10 +225,6 @@ const testCaseService = {
                 const sc = await tx.scenario.findUnique({ where: { id: scenarioId } });
                 if (!sc) throw new Error("Scenario not found");
               }
-              if (userId) {
-                const user = await tx.user.findUnique({ where: { id: userId } });
-                if (!user) throw new Error("User not found");
-              }
 
               testCase = await tx.testCase.create({
                 data: {
@@ -148,11 +232,10 @@ const testCaseService = {
                   name: name ?? null,
                   workflowId,
                   scenarioId: scenarioId ?? null,
-                  userId: userId ?? null
                 },
               });
               testCaseAction = "created";
-              await Log.info("TestCase created (with custom id)", { testCaseId: testCase.id, workflowId, scenarioId, userId });
+              await Log.info("TestCase created (with custom id)", { testCaseId: testCase.id, workflowId, scenarioId });
             }
           } else {
             if (!workflowId) throw new Error("Missing workflowId");
@@ -162,21 +245,16 @@ const testCaseService = {
               const sc = await tx.scenario.findUnique({ where: { id: scenarioId } });
               if (!sc) throw new Error("Scenario not found");
             }
-            if (userId) {
-              const user = await tx.user.findUnique({ where: { id: userId } });
-              if (!user) throw new Error("User not found");
-            }
 
             testCase = await tx.testCase.create({
               data: {
                 name: name ?? null,
                 workflowId,
-                scenarioId: scenarioId ?? null,
-                userId: userId ?? null
+                scenarioId: scenarioId ?? null
               },
             });
             testCaseAction = "created";
-            await Log.info("TestCase created", { testCaseId: testCase.id, workflowId, scenarioId, userId });
+            await Log.info("TestCase created", { testCaseId: testCase.id, workflowId, scenarioId });
           }
 
           const effectiveWorkflowId = testCase.workflowId;
@@ -361,11 +439,11 @@ const testCaseService = {
   },
 
   // services/testCaseService.js
-  updateTestCase: async ({ id, name, userId, nodes }) => {
+  updateTestCase: async ({ id, name, nodes }) => {
     try {
       const existing = await prisma.testCase.findUnique({
         where: { id },
-        select: { id: true, name: true, workflowId: true, scenarioId: true, userId: true }
+        select: { id: true, name: true, workflowId: true, scenarioId: true }
       });
       if (!existing) {
         return { status: 404, success: false, message: "TestCase not found" };
@@ -378,29 +456,22 @@ const testCaseService = {
         JSON.stringify(a) === JSON.stringify(b);
 
       const data = await prisma.$transaction(async (tx) => {
-        // 🔹 Validate userId mới nếu có truyền
-        if (userId) {
-          const user = await tx.user.findUnique({ where: { id: userId } });
-          if (!user) throw new Error("User not found");
-        }
 
-        // 1) Update name hoặc userId nếu khác
+        // 1) Update name nếu khác
         if (
-          (name !== undefined && name !== existing.name) ||
-          (userId !== undefined && userId !== existing.userId)
+          (name !== undefined && name !== existing.name)
         ) {
           await tx.testCase.update({
             where: { id },
             data: {
               ...(name !== undefined ? { name } : {}),
-              ...(userId !== undefined ? { userId } : {})
             }
           });
           testCaseAction = "updated";
           await Log.info("TestCase updated", {
             testCaseId: id,
-            from: { name: existing.name, userId: existing.userId },
-            to: { name, userId }
+            from: { name: existing.name },
+            to: { name }
           });
         }
 
@@ -487,7 +558,7 @@ const testCaseService = {
 
         const full = await tx.testCase.findUnique({
           where: { id },
-          include: { testCaseNodes: true, user: { select: { id: true, username: true } } } // 🔹 include user
+          include: { testCaseNodes: true }
         });
 
         return {

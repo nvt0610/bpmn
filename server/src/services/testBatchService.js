@@ -43,8 +43,16 @@ const testBatchService = {
         }
     },
 
-    createTestBatch: async ({ name, description, testCaseIds = [], scenarioIds = [] }) => {
+    createTestBatch: async ({ name, description, userId, testCaseIds = [], scenarioIds = [] }) => {
         await Log.info("Create TestBatch request received", { name, description, testCaseIds, scenarioIds });
+
+        if (!userId) {
+            return { status: 400, success: false, message: "userId is required" };
+        }
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            return { status: 404, success: false, message: "User not found" };
+        }
 
         let finalScenarioIds = [...new Set(scenarioIds)];
 
@@ -83,6 +91,7 @@ const testBatchService = {
             data: {
                 name: name || `Batch for ${finalScenarioIds.length} scenario(s)`,
                 description: description || `Auto batch for ${finalScenarioIds.length} scenario(s)`,
+                userId,
                 scenarios: { connect: finalScenarioIds.map(id => ({ id })) },
             },
             include: { scenarios: true },

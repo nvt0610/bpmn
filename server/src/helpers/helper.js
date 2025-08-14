@@ -74,3 +74,16 @@ export function buildWhereFromFilters({
 
   return AND.length ? { AND } : {};
 }
+// Helper để tránh lặp code
+export const handle = (fn) => async (req, res) => {
+  try {
+    const result = await fn(req);
+    const httpStatus = Number.isInteger(result.httpStatus) ? result.httpStatus : 200;
+    res.status(httpStatus).json({
+      message: result.message,
+      data: result.data
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Internal Server Error" });
+  }
+};

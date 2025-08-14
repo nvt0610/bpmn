@@ -8,7 +8,6 @@ const workflowRoutes = (app) => {
   router.get("/testcase", workflowController.getTestCases);
   router.get("/qcconfig", workflowController.getQcConfig);
   router.get("/testbatches", workflowController.getTestBatch);
-  router.get("/testcaselist", workflowController.getListTestCases);
   router.get("/results", workflowController.getResult)
   router.get("/", workflowController.getAllworkflows);
   router.get("/:id", workflowController.getWorkflowDetail);

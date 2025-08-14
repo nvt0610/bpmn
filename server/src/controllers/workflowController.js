@@ -47,11 +47,6 @@ const workflowController = {
     res.json(await workflowService.getResult({ workflowId, page, pageSize }));
   },
 
-  getListTestCases: async (req, res) => {
-    const { workflowId, page, pageSize } = req.query || {};
-    res.json(await workflowService.getListTestCases({ workflowId, page, pageSize }));
-  },
-
 };
 
 export default workflowController;

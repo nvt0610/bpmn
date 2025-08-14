@@ -4,7 +4,6 @@ import xml2json from "xml2json";
 import { v4 as uuidv4 } from "uuid";
 import n8nService from "./n8nService.js";
 import { Log } from "../helpers/logReceive.js"; // ghi log vào DB, KHÔNG đổi response
-import { getPaginationParams } from "../helpers/pagination.js";
 import { XMLParser } from "fast-xml-parser";
 
 const parser = new XMLParser({
@@ -121,83 +120,6 @@ async function createWorkflowNodesFromXml(workflowId, xmlContent) {
 }
 
 const workflowService = {
-
-    getListTestCases: async ({ workflowId, page, pageSize }) => {
-        if (!workflowId) return { message: "Missing workflowId" };
-
-        const { skip, take, page: pageNum, pageSize: sizeNum } = getPaginationParams({ page, pageSize });
-
-        // 1️⃣ Lấy danh sách test case + tổng số
-        const [testCases, total] = await Promise.all([
-            prisma.testCase.findMany({
-                where: { workflowId },
-                select: {
-                    id: true,
-                    name: true,
-                    createdAt: true,
-                    scenario: { select: { id: true, name: true } },
-                    user: { select: { username: true } },
-                    _count: { select: { testCaseNodes: true, results: true } }
-                },
-                orderBy: { createdAt: "desc" },
-                skip,
-                take
-            }),
-            prisma.testCase.count({ where: { workflowId } })
-        ]);
-
-        if (!testCases.length) {
-            return { page: pageNum, pageSize: sizeNum, total: 0, items: [] };
-        }
-
-        const testCaseIds = testCases.map(tc => tc.id);
-
-        // 2️⃣ Lấy toàn bộ result để check pass/fail
-        const results = await prisma.result.findMany({
-            where: { testCaseId: { in: testCaseIds } },
-            select: { testCaseId: true, result: true }
-        });
-
-        // 3️⃣ Xác định keyword pass/fail
-        const passKeywords = ["ok", "pass", "success", "complete"];
-        const failKeywords = ["error", "fail"];
-
-        const passMap = {};
-        const failMap = {};
-
-        results.forEach(r => {
-            const msg = (r.result?.message || "").toLowerCase();
-            if (passKeywords.some(k => msg.includes(k))) {
-                passMap[r.testCaseId] = (passMap[r.testCaseId] || 0) + 1;
-            } else if (failKeywords.some(k => msg.includes(k))) {
-                failMap[r.testCaseId] = (failMap[r.testCaseId] || 0) + 1;
-            }
-        });
-
-        // 4️⃣ Map dữ liệu trả ra
-        const items = testCases.map(tc => {
-            const totalRuns = tc._count.results;
-            const passCount = passMap[tc.id] || 0;
-            const failCount = failMap[tc.id] || 0;
-
-            return {
-                testCaseId: tc.id,
-                testCaseName: tc.name,
-                scenarioId: tc.scenario?.id || null,
-                scenarioName: tc.scenario?.name || null,
-                numberOfTestCaseNode: tc._count.testCaseNodes,
-                totalTestRuns: totalRuns,
-                passCount,
-                failCount,
-                passSummary: `${passCount}/${totalRuns}`, // ✅ thêm field này
-                createdAt: tc.createdAt,
-                createdBy: tc.user.username,
-                workflowId
-            };
-        });
-
-        return { page: pageNum, pageSize: sizeNum, total, items };
-    },
 
     getQcConfig: async ({ workflowId }) => {
         if (!workflowId) {
@@ -412,7 +334,8 @@ const workflowService = {
 
     getTestCases: async ({ workflowId }) => {
         if (!workflowId) {
-            return { status: 400, success: false, message: "Missing workflowId" };
+            await Log.warn("Missing workflowId when fetching test cases");
+            return { status: 400, message: "Missing workflowId" };
         }
 
         try {
@@ -422,22 +345,23 @@ const workflowService = {
                 orderBy: { createdAt: "desc" }
             });
 
+            await Log.info("Fetched test cases", { workflowId, count: testCases.length });
+
             return {
                 status: 200,
-                success: true,
-                workflowId,
-                totalTestCases: testCases.length,
-                testCase: testCases.map(tc => ({
-                    id: tc.id,
-                    name: tc.name || null
-                }))
+                message: "Fetched test cases successfully",
+                data: {
+                    workflowId,
+                    totalTestCases: testCases.length,
+                    testCases: testCases.map(tc => ({
+                        id: tc.id,
+                        name: tc.name || null
+                    }))
+                }
             };
         } catch (error) {
-            return {
-                status: 500,
-                success: false,
-                message: "Failed to fetch test cases: " + error.message
-            };
+            await Log.error("Failed to fetch test cases", { workflowId, error: error.message });
+            return { status: 500, message: "Failed to fetch test cases" };
         }
     },
 
@@ -489,7 +413,13 @@ const workflowService = {
                     id: true,
                     testCaseId: true,
                     name: true,
-                    result: true,
+                    results: { // ✅ Quan hệ nhiều kết quả
+                        select: {
+                            result: true,
+                            createdAt: true,
+                            updatedAt: true
+                        }
+                    },
                     resultReceiveAt: true,
                     createdAt: true,
                     updatedAt: true,
@@ -715,10 +645,11 @@ const workflowService = {
     createWorkflow: async (payload) => {
         const {
             name,
-            project,
+            projectId,
             status,
             userId,
             xmlContent,
+            description,
             jsonContent,
         } = payload;
 
@@ -729,9 +660,9 @@ const workflowService = {
 
         if (!finalJsonContent && finalXmlContent) {
             try {
-                finalJsonContent = parser.parse(finalXmlContent); // fast-xml-parser parse XML thành object
+                finalJsonContent = parser.parse(finalXmlContent);
             } catch (err) {
-                throw new Error("Failed to parse XML to JSON: " + err.message);
+                return { status: 400, message: "Invalid XML content" };
             }
         }
 
@@ -742,9 +673,13 @@ const workflowService = {
             ]);
 
             const errors = [];
-            if (existingWorkflow) errors.push("Workflow name already exists");
-            if (!existingUser) errors.push("User not found");
-            if (errors.length > 0) return { message: errors.join(" & ") };
+            if (existingWorkflow) return { status: 409, message: "Workflow name already exists" };
+            if (!existingUser) return { status: 404, message: "User not found" };
+
+            if (projectId) {
+                const project = await prisma.project.findUnique({ where: { id: projectId } });
+                if (!project) return { status: 404, message: "Project not found" };
+            }
 
             // 1. Tạo workflow
             const workflow = await prisma.workflow.create({
@@ -752,7 +687,8 @@ const workflowService = {
                     name,
                     userId,
                     updatedId,
-                    ...(project && { project }),
+                    description,
+                    ...(projectId && { projectId }),
                     ...(status && { status }),
                     ...(finalXmlContent && { xmlContent: finalXmlContent }),
                     ...(finalJsonContent && { jsonContent: finalJsonContent }),
@@ -763,33 +699,35 @@ const workflowService = {
             const nodeStats = await createWorkflowNodesFromXml(workflow.id, finalXmlContent);
 
             // 3. Query lại ngay để trả kèm node
+
             const newWorkflow = await prisma.workflow.findUnique({
                 where: { id: workflow.id },
-                include: { workflowNode: true }
+                select: {
+                    id: true, name: true, description: true,
+                    project: { select: { name: true } },
+                    workflowNode: true
+                }
             });
 
-            // 4. Log
-            return {
-                message: `Workflow created successfully (nodes: ${nodeStats.created} created, ${nodeStats.updated} updated)`,
-                createdNodes: nodeStats.created,
-                updatedNodes: nodeStats.updated,
-                data: newWorkflow,
-            };
+            // Xoá project, chỉ giữ projectName
+            await Log.info("Workflow created", { workflowId: workflow.id, createdNodes: nodeStats.created });
 
             return {
-                message: "Workflow created successfully",
-                data: newWorkflow,
+                status: 201,
+                message: `Workflow created successfully (nodes: ${nodeStats.created} created, ${nodeStats.updated} updated)`,
+                data: {
+                    ...newWorkflow,
+                    projectName: newWorkflow.project?.name || null
+                }
             };
         } catch (error) {
-            return {
-                status: 500,
-                message: "Error creating workflow: " + error.message,
-            };
+            await Log.error("Failed to create workflow", { error: error.message });
+            return { status: 500, message: "Failed to create workflow" };
         }
     },
 
     updateWorkflow: async (payload) => {
-        const { id, updatedBy, userId, ...newData } = payload;
+        const { id, updatedBy, userId, description, ...newData } = payload;
         const updaterId = updatedBy || userId || null;
 
         try {
@@ -800,6 +738,11 @@ const workflowService = {
                 const dataToUpdate = Object.fromEntries(
                     Object.entries(newData).filter(([k, v]) => v !== undefined && existing[k] !== v)
                 );
+
+                if (description !== undefined && existing.description !== description) {
+                    dataToUpdate.description = description;
+                }
+
                 if (updaterId) dataToUpdate.updatedId = updaterId; // ← lưu người cập nhật
 
                 if (dataToUpdate.name) {

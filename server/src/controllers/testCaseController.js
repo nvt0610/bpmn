@@ -33,6 +33,16 @@ const testCaseController = {
     const result = await testCaseService.deleteTestCase(req.params);
     res.status(result.status).json(result);
   },
+
+  getListTestCases: async (req, res) => {
+    const { page, pageSize, workflowId } = req.query || {};
+    const result = await testCaseService.getListTestCases({
+      page,
+      pageSize,
+      workflowId
+    });
+    res.json(result);
+  }
 };
 
 export default testCaseController;

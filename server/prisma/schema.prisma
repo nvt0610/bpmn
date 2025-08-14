@@ -27,8 +27,7 @@ model User {
 
   role     Role       @relation(fields: [roleId], references: [id])
   workflow Workflow[]
-  testCase TestCase[]
-  result   Result[]
+  testBatch TestBatch[]
 
   @@index([roleId])
   @@index([createdAt])
@@ -135,6 +134,9 @@ model TestBatch {
   scenarios Scenario[] // Một batch chứa nhiều scenario
   updatedAt DateTime   @updatedAt
 
+  userId String 
+  user        User           @relation(fields: [userId], references: [id])
+
   results     Result[]   // 🔹 back-relation
 
   @@index([createdAt])
@@ -164,9 +166,6 @@ model TestCase {
 
   scenarioId String? // Khóa ngoại liên kết tới Scenario
   scenario   Scenario? @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
-
-  userId String 
-  user        User           @relation(fields: [userId], references: [id])
 
   workflowId String
   workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
@@ -228,9 +227,6 @@ model Result {
 
   workflowNodeId String
   workflowNode   WorkflowNode   @relation(fields: [workflowNodeId], references: [id])
-
-  userId         String       // ai chạy test
-  user           User         @relation(fields: [userId], references: [id])
 
   // ===== Dữ liệu kết quả =====
   result         Json?

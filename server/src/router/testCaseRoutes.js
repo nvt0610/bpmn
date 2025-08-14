@@ -4,6 +4,7 @@ import testCaseController from "../controllers/testCaseController.js";
 const router = express.Router();
 
 const testCaseRoutes = (app) => {
+  router.get("/getlist", testCaseController.getListTestCases);
   router.get("/", testCaseController.getAllTestCases);
   router.get("/:id", testCaseController.getTestCaseById);
   router.post("/", testCaseController.createTestCase);
