@@ -1,52 +1,70 @@
+// controllers/workflowController.js
 import workflowService from "../services/workflowService.js";
 
 const workflowController = {
   getAllworkflows: async (req, res) => {
-    res.json(await workflowService.getAllworkflows(req.query));
+    const { status, ...body } = await workflowService.getAllworkflows(req.query);
+    res.status(status).json(body);
   },
 
   getWorkflowDetail: async (req, res) => {
-    res.json(await workflowService.getWorkflowDetail(req.params));
+    const { status, ...body } = await workflowService.getWorkflowDetail(req.params);
+    res.status(status).json(body);
   },
 
   createWorkflow: async (req, res) => {
-    res.json(await workflowService.createWorkflow(req.body)); // full payload
+    const { status, ...body } = await workflowService.createWorkflow(req.body);
+    res.status(status).json(body);
   },
 
   updateWorkflow: async (req, res) => {
-    res.json(await workflowService.updateWorkflow({
+    const { status, ...body } = await workflowService.updateWorkflow({
       ...req.params, // id
       ...req.body,   // các field khác
-    }));
+    });
+    res.status(status).json(body);
   },
 
   deleteWorkflow: async (req, res) => {
-    res.json(await workflowService.deleteWorkflow(req.params)); // { id }
+    const { status, ...body } = await workflowService.deleteWorkflow(req.params);
+    res.status(status).json(body);
   },
 
   getConfigData: async (req, res) => {
-    const { workflowId, page, pageSize } = req.query || {};
-    res.json(await workflowService.getConfigData({ workflowId, page, pageSize }));
+    const { workflowId, nodeId, userId } = req.query || {};
+    const { status, ...body } = await workflowService.getConfigData({ workflowId, nodeId, userId });
+    res.status(status).json(body);
   },
 
   getTestCases: async (req, res) => {
-    res.json(await workflowService.getTestCases(req.query));
+    const { status, ...body } = await workflowService.getTestCases(req.query);
+    res.status(status).json(body);
   },
 
   getQcConfig: async (req, res) => {
-    console.log("workflowId from query:", req.query.workflowId);
-    res.json(await workflowService.getQcConfig({ workflowId: req.query.workflowId }));
+    const { status, ...body } = await workflowService.getQcConfig({ workflowId: req.query.workflowId });
+    res.status(status).json(body);
   },
+
   getTestBatch: async (req, res) => {
     const { workflowId, page, pageSize } = req.query || {};
-    res.json(await workflowService.getTestBatch({ workflowId, page, pageSize }));
+    const { status, ...body } = await workflowService.getTestBatch({ workflowId, page, pageSize });
+    res.status(status).json(body);
   },
 
   getResult: async (req, res) => {
     const { workflowId, page, pageSize } = req.query || {};
-    res.json(await workflowService.getResult({ workflowId, page, pageSize }));
+    const { status, ...body } = await workflowService.getResult({ workflowId, page, pageSize });
+    res.status(status).json(body);
   },
 
+  runWorkflowById: async (req, res) => {
+    const { status, ...body } = await workflowService.runWorkflowById({
+      workflowId: req.params?.id || req.body?.workflowId || req.query?.workflowId,
+      testBatchId: req.body?.testBatchId || req.query?.testBatchId,
+    });
+    res.status(status).json(body);
+  },
 };
 
 export default workflowController;
