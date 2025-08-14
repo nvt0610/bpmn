@@ -1,7 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 import xml2json from "xml2json";
-import { v4 as uuidv4 } from "uuid";
 import n8nService from "./n8nService.js";
 import { Log } from "../helpers/logReceive.js"; // ghi log vào DB, KHÔNG đổi response
 import { XMLParser } from "fast-xml-parser";
@@ -10,18 +9,6 @@ const parser = new XMLParser({
     ignoreAttributes: false, // để giữ lại @id, @name, ...
     attributeNamePrefix: "@_", // prefix cho attribute
 });
-
-function generateBpmnXmlWithUuid(workflowName) {
-    const uuid = uuidv4().replace(/-/g, '');
-    const processId = `Process_${uuid}`;
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_${uuid}" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.37.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.7.0">
-  <bpmn:process id="${processId}" name="${workflowName}" isExecutable="true" />
-  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${processId}" />
-  </bpmndi:BPMNDiagram>
-</bpmn:definitions>`;
-}
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n || 0));
 
@@ -654,7 +641,7 @@ const workflowService = {
         } = payload;
 
         // Load file mặc định nếu không truyền xmlContent
-        let finalXmlContent = xmlContent || generateBpmnXmlWithUuid(name);
+        const finalXmlContent = xmlContent || null;
         let finalJsonContent = jsonContent;
         let updatedId = userId;
 
