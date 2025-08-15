@@ -1,5 +1,6 @@
 import express from "express";
 import scenarioController from "../controllers/scenarioController.js";
+import { API_PREFIX } from "../config/appConfig.js";
 
 const router = express.Router();
 
@@ -9,8 +10,9 @@ const scenarioRoutes = (app) => {
   router.post("/", scenarioController.createScenario);
   router.put("/:id", scenarioController.updateScenario);
   router.delete("/:id", scenarioController.deleteScenario);
+  
+  return app.use(`${API_PREFIX}/scenarios`, router);
 
-  return app.use("/api/v2/scenarios", router);
 };
 
 export default scenarioRoutes;

@@ -1,5 +1,6 @@
 import express from "express";
 import roleController from "../controllers/roleController.js";
+import { API_PREFIX } from "../config/appConfig.js";
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ const roleRoutes = (app) => {
   router.put("/:id", roleController.updateRole);
   router.delete("/:id", roleController.deleteRole);
 
-  return app.use("/api/v2/roles", router);
+  return app.use(`${API_PREFIX}/results`, router);
 };
 
 export default roleRoutes;

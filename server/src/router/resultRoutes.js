@@ -1,5 +1,6 @@
 import express from "express";
 import resultController from "../controllers/resultController.js";
+import { API_PREFIX } from "../config/appConfig.js";
 
 const router = express.Router();
 
@@ -10,7 +11,8 @@ const resultRoutes = (app) => {
   router.put("/:id", resultController.updateResult);
   router.delete("/:id", resultController.deleteResult);
 
-  return app.use("/api/v2/results", router);
+  return app.use(`${API_PREFIX}/results`, router);
+
 };
 
 export default resultRoutes;

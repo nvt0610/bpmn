@@ -4,6 +4,18 @@ const prisma = new PrismaClient();
 const userService = {
   register: async ({ username, email, password, roleId }) => {
     try {
+      if (!username || !email || !password || !roleId) {
+        return { status: 400, success: false, message: "Missing required fields" };
+      }
+
+      // Kiểm tra roleId có tồn tại
+      const roleExists = await prisma.role.findUnique({
+        where: { id: roleId },
+      });
+      if (!roleExists) {
+        return { status: 404, success: false, message: "Role not found" };
+      }
+
       // Kiểm tra trùng username/email
       const existing = await prisma.user.findFirst({
         where: { OR: [{ username }, { email }] },
@@ -12,14 +24,12 @@ const userService = {
         return { status: 409, success: false, message: "Username or email already exists" };
       }
 
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
-
+      // Lưu password thuần
       const user = await prisma.user.create({
         data: {
           username,
           email,
-          password: hashedPassword,
+          password, // không hash
           roleId,
         },
       });
@@ -28,7 +38,12 @@ const userService = {
         status: 201,
         success: true,
         message: "User registered successfully",
-        data: { id: user.id, username: user.username, email: user.email },
+        data: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          roleId: user.roleId,
+        },
       };
     } catch (error) {
       throw new Error("Failed to register: " + error.message);

@@ -1,5 +1,6 @@
 import express from "express";
 import workflowController from "../controllers/workflowController.js";
+import { API_PREFIX } from "../config/appConfig.js";
 
 const router = express.Router();
 
@@ -15,7 +16,8 @@ const workflowRoutes = (app) => {
   router.put("/:id", workflowController.updateWorkflow);
   router.delete("/:id", workflowController.deleteWorkflow);
 
-  return app.use("/api/v2/workflows", router);
+  return app.use(`${API_PREFIX}/workflows`, router);
+
 };
 
 export default workflowRoutes;

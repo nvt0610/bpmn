@@ -1,5 +1,6 @@
 import express from "express";
 import testCaseController from "../controllers/testCaseController.js";
+import { API_PREFIX } from "../config/appConfig.js";
 
 const router = express.Router();
 
@@ -11,7 +12,8 @@ const testCaseRoutes = (app) => {
   router.put("/:id", testCaseController.updateTestCase);
   router.delete("/:id", testCaseController.deleteTestCase);
 
-  return app.use("/api/v2/testcases", router);
+  return app.use(`${API_PREFIX}/testcases`, router);
+
 };
 
 export default testCaseRoutes;
