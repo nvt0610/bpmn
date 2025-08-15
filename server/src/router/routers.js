@@ -10,6 +10,7 @@ import testBatchRoutes from "./testBatchRoutes.js";
 import runTestn8nController from "../controllers/runTestn8nController.js";
 import resultReceiveController from "../controllers/resultReceiveController.js";
 import projectRoutes from "./projectRoutes.js";
+import userController from "../controllers/userController.js";
 
 let initWebRouter = (app) => {
   roleRoutes(app);
@@ -25,7 +26,8 @@ let initWebRouter = (app) => {
 
   app.post("/api/v2/batchresultreceive", resultReceiveController.receiveBatchResult);
   app.post("/api/v2/runworkflow", runTestn8nController.runWorkflow);
-
+  app.post("/login", userController.login);
+  app.post("/register", userController.register);
 };
 
 export default initWebRouter;

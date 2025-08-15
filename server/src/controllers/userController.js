@@ -1,6 +1,16 @@
 import userService from "../services/userService.js";
 
 const userController = {
+
+  register: async (req, res) => {
+    const result = await userService.register(req.body);
+    res.status(result.status).json(result);
+  },
+  login: async (req, res) => {
+    const result = await userService.login(req.body);
+    res.status(result.status).json(result);
+  },
+
   getAllUsers: async (req, res) => {
     const result = await userService.getAllUsers();
     res.status(result.status).json(result);
