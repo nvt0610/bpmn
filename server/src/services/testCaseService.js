@@ -147,6 +147,12 @@ const testCaseService = {
       select: {
         id: true,
         name: true,
+        scenario: {              // 🔹 Lấy Scenario info
+          select: { id: true, name: true }
+        },
+        workflow: {              // 🔹 Lấy Workflow info
+          select: { id: true, name: true }
+        },
         testCaseNodes: {
           select: {
             id: true,
